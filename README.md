@@ -34,3 +34,19 @@ dependencies {
     <version>0.1.0</version>
 </dependency>
 ```
+
+
+### Samples:
+
+#### Create a self signed certificate:
+```java
+// create new certificate
+CertificateStore certificateStore = 
+    X509CertificateGenerator.getInstance().createCreateCertificate(
+        PKIUtil.getInstance().generateKeyPair("RSA", 2048), "MyCertificate", "localhost", new Date(), 2 * 365);  // from now until 2 years  
+
+certificateStore.write("mypkc12-cert.p12", "alias", "password");
+certificateStore.writeCertificate("mycertificate.crt");
+certificateStore.writePublicKey("mypublickey.pub");
+certificateStore.writePrivateKey("myprivatekey.pem");
+```     

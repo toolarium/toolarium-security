@@ -1,8 +1,7 @@
 /*
  * build.gradle
  *
- * Copyright by toolarium-security, all rights reserved.
- * MIT License: https://mit-license.org
+ * Copyright by toolarium, all rights reserved.
  */
 apply from: "https://raw.githubusercontent.com/toolarium/common-gradle-build/master/gradle/common.gradle"
 
@@ -13,10 +12,12 @@ apply from: "https://raw.githubusercontent.com/toolarium/common-gradle-build/mas
 dependencies {
     // see https://docs.gradle.org/current/userguide/java_library_plugin.html
 
-    // utilities
-    //implementation "net.sf.jptools:jptools:1.7.7"
-    //implementation "net.sf.jptools:jptools:1.7.7:slf4j-redirect"
+    // bouncy castle
+    implementation "com.github.toolarium:toolarium-common:0.1.1"
 
+    // security library
+    implementation 'org.bouncycastle:bcpkix-jdk15on:1.70'
+    
     // logging
     implementation 'org.slf4j:slf4j-api:1.7.30'
     testRuntimeOnly 'ch.qos.logback:logback-classic:1.2.3'

@@ -12,10 +12,10 @@ apply from: "https://raw.githubusercontent.com/toolarium/common-gradle-build/mas
 dependencies {
     // see https://docs.gradle.org/current/userguide/java_library_plugin.html
 
-    // bouncy castle
-    implementation "com.github.toolarium:toolarium-common:0.1.1"
+    implementation "com.github.toolarium:toolarium-common:0.4.0"
 
     // security library
+    implementation 'org.bouncycastle:bcprov-jdk15on:1.70'
     implementation 'org.bouncycastle:bcpkix-jdk15on:1.70'
     
     // logging

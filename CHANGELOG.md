@@ -5,8 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [ 0.1.1 ] - 2023-07-25
+## [ 1.0.0 ] - 2023-12-10
+### Added
+- Test several cases.
+- Finalised implementation.
 
+## [ 0.2.0 ] - 2023-08-03
+### Added
+- Added ISecurityManagerProvider, IKeyStoreConfiguration and KeyStoreUtil.
+- Additional test cases.
 ## [ 0.1.0 ] - 2023-07-25
 ### Added
 - Setup initial version.

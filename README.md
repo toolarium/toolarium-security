@@ -37,6 +37,11 @@ dependencies {
 
 
 ### Samples:
+#### Create hashes, e.g. SHA-256, SHA-512...
+```java
+byte[] digest1 = CryptoHashUtil.getInstance().sha256("content".getBytes());
+byte[] digest2 = CryptoHashUtil.getInstance().createHash(/*provider*/null, "SHA-256", "content")
+```
 
 #### Create a self signed certificate:
 ```java
@@ -50,3 +55,30 @@ certificateStore.writeCertificate("mycertificate.crt");
 certificateStore.writePublicKey("mypublickey.pub");
 certificateStore.writePrivateKey("myprivatekey.pem");
 ```     
+
+#### Create a self-signed certificate and use it for a service and client
+```java
+ISecurityManagerProvider securityManagerProvider = SecurityManagerProviderFactory.getInstance().getSecurityManagerProvider("toolarium", "changit");
+...
+    // create SSL context with self-signed certificate for a SSL server / service
+    SSLContext sslContext = SSLContextFactory.getInstance().createSslContext(securityManagerProvider);
+    SSLServerSocket s  = SSLUtil.getInstance().getSSLServerSocket(sslContext, port, true, LOG::debug);
+...
+    // create ssl context with added self-signed certificate in trust store for a SSL client
+    SSLContext sslContext = SSLContextFactory.getInstance().createSslContext(securityManagerProvider);
+```
+
+#### Use of the challenge / response util
+```java
+String provider = null;
+KeyPair keyPair = PKIUtil.getInstance().generateKeyPair(provider, "RSA", 1024);
+
+// generate challenge
+byte[] challenge = ChallengeResponseUtil.getInstance().getChallenge(128);
+
+// generate response of the given challenge
+byte[] response = ChallengeResponseUtil.getInstance().generateResponse(provider, "RSA", keyPair.getPrivate(), challenge);
+
+// verify the response and the challenge
+assertTrue(ChallengeResponseUtil.getInstance().checkResponse(provider, "RSA", keyPair.getPublic(), challenge, response));
+```

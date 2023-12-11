@@ -434,7 +434,7 @@ public final class KeyStoreUtil {
     public KeyStore addCertificateToTrustKeystore(String alias, X509Certificate[] certificateChain) throws GeneralSecurityException, IOException {
         final KeyStore trustManagerKeyStore = getDefaultTrustKeyStore();
 
-        for (int i = 1; i <= certificateChain.length; i++) {
+        for (int i = 0; i < certificateChain.length; i++) {
             // add the key manager store in the trust store
             trustManagerKeyStore.setCertificateEntry(alias + i, certificateChain[i]);
             if (LOG.isDebugEnabled()) {

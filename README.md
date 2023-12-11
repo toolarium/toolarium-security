@@ -1,5 +1,5 @@
 [![License](https://img.shields.io/github/license/toolarium/toolarium-security)](https://github.com/toolarium/toolarium-security/blob/master/LICENSE)
-[![Maven Central](https://img.shields.io/maven-central/v/com.github.toolarium/toolarium-security/1.0.2)](https://search.maven.org/artifact/com.github.toolarium/toolarium-security/1.0.2/jar)
+[![Maven Central](https://img.shields.io/maven-central/v/com.github.toolarium/toolarium-security/1.0.3)](https://search.maven.org/artifact/com.github.toolarium/toolarium-security/1.0.3/jar)
 [![javadoc](https://javadoc.io/badge2/com.github.toolarium/toolarium-security/javadoc.svg)](https://javadoc.io/doc/com.github.toolarium/toolarium-security)
 
 # toolarium-security
@@ -21,7 +21,7 @@ We use [SemVer](http://semver.org/) for versioning. For the versions available, 
 
 ```groovy
 dependencies {
-    implementation "com.github.toolarium:toolarium-security:1.0.2"
+    implementation "com.github.toolarium:toolarium-security:1.0.3"
 }
 ```
 
@@ -31,7 +31,7 @@ dependencies {
 <dependency>
     <groupId>com.github.toolarium</groupId>
     <artifactId>toolarium-security</artifactId>
-    <version>1.0.2</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 

@@ -88,7 +88,7 @@ public class SSLContextFactoryTest {
 
         // start echo service
         SSLEchoService sslEchoService = startSSLEchoService(securityManagerProvider, testPort);
- 
+
         SSLContext sslContext = SSLContext.getInstance("TLS");
         sslContext.init(securityManagerProvider.getKeyManagers(), KeyStoreUtil.getInstance().getTrustAllCertificateManager(), SecureRandom.getInstanceStrong()); 
 
@@ -176,6 +176,8 @@ public class SSLContextFactoryTest {
         LOG.debug("Response " + response.statusCode() + ":\n" + response.body());
         assertEquals(requestText, response.body());
         
+        Thread.sleep(100L);
+
         // send stop server command: exit
         request = HttpRequest.newBuilder()
                 .POST(HttpRequest.BodyPublishers.ofString("exit"))
@@ -183,6 +185,7 @@ public class SSLContextFactoryTest {
                 .build();
 
         response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        Thread.sleep(10L);
         assertFalse(sslEchoService.isRunning());
         
     }

@@ -9,7 +9,6 @@ import com.github.toolarium.common.security.ISecuredValue;
 import com.github.toolarium.common.security.SecuredValue;
 import com.github.toolarium.security.certificate.X509CertificateGenerator;
 import com.github.toolarium.security.certificate.dto.CertificateStore;
-import com.github.toolarium.security.certificate.util.PKIUtil;
 import com.github.toolarium.security.keystore.dto.IKeyStoreConfiguration;
 import com.github.toolarium.security.keystore.dto.KeyStoreConfiguration;
 import com.github.toolarium.security.keystore.impl.SecurityManagerProviderImpl;
@@ -19,7 +18,6 @@ import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.cert.X509Certificate;
-import javax.net.ssl.X509TrustManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,35 +80,10 @@ public final class SecurityManagerProviderFactory {
         try {
             CertificateStore certificateStore = X509CertificateGenerator.getInstance().createCreateCertificate(certificateStoreAlias);
             final KeyStore keyManagerStore = certificateStore.toKeyStore(certificateStoreAlias, keyStorePassword);
-            final KeyStore trustManagerKeyStore = KeyStoreUtil.getInstance().createKeyStore(null);
-            
-            X509TrustManager defaultTm = KeyStoreUtil.getInstance().getDefaultX509TrustManager();
-            X509Certificate[] trustedIssuers = defaultTm.getAcceptedIssuers();
-            if (trustedIssuers != null) {
-                int i = 1;
-                
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("Init new default trust stire with default trusted issuers: " + trustedIssuers.length);
-                }
+            //final KeyStore trustManagerKeyStore = KeyStoreUtil.getInstance().getDefaultTrustKeyStore();
 
-                for (X509Certificate trustedIssuer : trustedIssuers) {
-                    // add the key manager store in the trust store
-                    trustManagerKeyStore.setCertificateEntry("cert" + i++, trustedIssuer);
-                    
-                    //if (LOG.isDebugEnabled()) {
-                    //    PKIUtil.getInstance().processCertificate(LOG::debug, "Add certificate to trust store:", trustedIssuers);
-                    //}
-                }
-            }
-
-            // add the key manager store in the trust store
             X509Certificate selfSignedCertificate = (X509Certificate)keyManagerStore.getCertificate(certificateStoreAlias);
-            trustManagerKeyStore.setCertificateEntry(certificateStoreAlias, selfSignedCertificate);
-            if (LOG.isDebugEnabled()) {
-                PKIUtil.getInstance().processCertificate(LOG::debug, "Add self-signed certificate to trust store:", selfSignedCertificate);
-            }
-            
-            
+            final KeyStore trustManagerKeyStore = KeyStoreUtil.getInstance().addCertificateToTrustKeystore(certificateStoreAlias, selfSignedCertificate);
             return new SecurityManagerProviderImpl(trustManagerKeyStore, keyManagerStore, new SecuredValue<String>(keyStorePassword, "..."));
         } catch (IOException | GeneralSecurityException e) {
             LOG.warn("Could not create certificate: " + e.getMessage(), e);

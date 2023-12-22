@@ -42,36 +42,48 @@ import org.slf4j.LoggerFactory;
  */
 public final class PKIUtil {
 
-    /** the public key certifcate start */
+    /** the public key certificate start */
     public static final String PUBLIC_CERTIFICATE_START = "-----BEGIN CERTIFICATE-----";
 
-    /** the public key certifcate end */
+    /** the public key certificate end */
     public static final String PUBLIC_CERTIFICATE_END = "-----END CERTIFICATE-----";
 
-    /** the public rsa key start */
+    /** the public RSA key start */
     public static final String PUBLIC_RSA_KEY_START = "-----BEGIN RSA PUBLIC KEY-----";
 
-    /** the public rsa key end */
+    /** the public RSA key end */
     public static final String PUBLIC_RSA_KEY_END = "-----END RSA PUBLIC KEY-----";
 
-    /** the public dsa key start */
+    /** the public DSA key start */
     public static final String PUBLIC_DSA_KEY_START = "-----BEGIN DSA PUBLIC KEY-----";
 
-    /** the public dsa key end */
+    /** the public DSA key end */
     public static final String PUBLIC_DSA_KEY_END = "-----END DSA PUBLIC KEY-----";
 
-    /** the private RSA key certifcate start */
+    /** the public EC key start */
+    public static final String PUBLIC_EC_KEY_START = "-----BEGIN EC PUBLIC KEY-----";
+
+    /** the public EC key end */
+    public static final String PUBLIC_EC_KEY_END = "-----END EC PUBLIC KEY-----";
+
+    /** the private RSA key certificate start */
     public static final String PRIVATE_RSA_KEY_START = "-----BEGIN RSA PRIVATE KEY-----";
 
-    /** the private RSA key certifcate end */
+    /** the private RSA key certificate end */
     public static final String PRIVATE_RSA_KEY_END = "-----END RSA PRIVATE KEY-----";
 
-    /** the private DSA key certifcate start */
+    /** the private DSA key certificate start */
     public static final String PRIVATE_DSA_KEY_START = "-----BEGIN DSA PRIVATE KEY-----";
 
-    /** the private DSA key certifcate end */
+    /** the private DSA key certificate end */
     public static final String PRIVATE_DSA_KEY_END = "-----END DSA PRIVATE KEY-----";
-    
+
+    /** the private ECA key certificate start */
+    public static final String PRIVATE_EC_KEY_START = "-----BEGIN EC PRIVATE KEY-----";
+
+    /** the private EC key certificate end */
+    public static final String PRIVATE_EC_KEY_END = "-----END EC PRIVATE KEY-----";
+
     private static final String NL = "\n";
     private static final Logger LOG = LoggerFactory.getLogger(PKIUtil.class);
 
@@ -234,7 +246,7 @@ public final class PKIUtil {
         return certs;
     }
 
-
+    
     /**
      * Reads PKCS#8 formated public key from a buffer which are each bounded at the beginning by
      * <code>-----BEGIN PUBLIC KEY-----</code>, and bounded at the end by
@@ -259,6 +271,25 @@ public final class PKIUtil {
         X509EncodedKeySpec spec = new X509EncodedKeySpec(Base64.getDecoder().decode(t.toBytes()));
         KeyFactory kf = KeyFactory.getInstance("DSA");
         return kf.generatePublic(spec);
+    }
+
+    
+    /**
+     * Reads PKCS#8 formated public key from a buffer which are each bounded at the beginning by
+     * <code>-----BEGIN PUBLIC KEY-----</code>, and bounded at the end by
+     * <code>-----END PUBLIC KEY-----</code>.
+     * 
+     * @param buffer the data
+     * @return the public key
+     * @throws IOException in case of error
+     * @throws GeneralSecurityException in case of error
+     */
+    public PublicKey getDSAPublicKey(ByteArray buffer) throws IOException, GeneralSecurityException {
+        if (buffer == null || buffer.length() == 0) {
+            return null;
+        }
+        
+        return getDSAPublicKey(buffer.toBytes());
     }
 
 
@@ -286,6 +317,71 @@ public final class PKIUtil {
         X509EncodedKeySpec spec = new X509EncodedKeySpec(Base64.getDecoder().decode(t.toBytes()));
         KeyFactory kf = KeyFactory.getInstance("RSA");
         return kf.generatePublic(spec);
+    }
+
+    
+    /**
+     * Reads PKCS#8 formated public key from a buffer which are each bounded at the beginning by
+     * <code>-----BEGIN PUBLIC KEY-----</code>, and bounded at the end by
+     * <code>-----END PUBLIC KEY-----</code>.
+     * 
+     * @param buffer the data
+     * @return the public key
+     * @throws IOException in case of error
+     * @throws GeneralSecurityException in case of error
+     */
+    public PublicKey getRSAPublicKey(ByteArray buffer) throws IOException, GeneralSecurityException {
+        if (buffer == null || buffer.length() == 0) {
+            return null;
+        }
+        
+        return getRSAPublicKey(buffer.toBytes());
+    }
+
+    
+    /**
+     * Reads PKCS#8 formated public key from a buffer,
+     * which are each bounded at the beginning by
+     * <code>-----BEGIN RSA PRIVATE KEY-----</code>, and bounded at the end by
+     * <code>-----END RSA PRIVATE KEY-----</code>.
+     * @param buffer the data
+     * @return the public key
+     * @throws IOException in case of error
+     * @throws GeneralSecurityException in case of error
+     */
+    public PublicKey getECPublicKey(byte[] buffer) throws IOException, GeneralSecurityException {
+        if (buffer == null || buffer.length == 0) {
+            return null;
+        }
+        
+        @SuppressWarnings("resource")
+        ByteArray t = new ByteArray(buffer).replace(new ByteArray(PUBLIC_EC_KEY_START), new ByteArray());
+        t = t.replace(new ByteArray(PUBLIC_EC_KEY_END), new ByteArray());
+        t = t.replace(new ByteArray("\r"), new ByteArray());
+        t = t.replace(new ByteArray(NL), new ByteArray());
+
+        X509EncodedKeySpec spec = new X509EncodedKeySpec(Base64.getDecoder().decode(t.toBytes()));
+        KeyFactory kf = KeyFactory.getInstance("EC");
+        return kf.generatePublic(spec);
+    }
+
+    
+    /**
+     * Reads PKCS#8 formated public key from a buffer which are each bounded at the beginning by
+     * <code>-----BEGIN PUBLIC KEY-----</code>, and bounded at the end by
+     * <code>-----END PUBLIC KEY-----</code>.
+     * 
+     * @param buffer the data
+     * @return the public key
+     * @throws IOException in case of error
+     * @throws GeneralSecurityException in case of error
+     */
+    public PublicKey getECPublicKey(ByteArray buffer) throws IOException, GeneralSecurityException {
+        if (buffer == null || buffer.length() == 0) {
+            return null;
+        }
+        
+        return getECPublicKey(buffer.toBytes());
     }
 
 
@@ -352,7 +448,7 @@ public final class PKIUtil {
         keyfis.read(encKey);
         keyfis.close();
 
-        return getDSAPrivateKey(encKey);
+        return getDSAPrivateKey(new ByteArray(encKey));
     }
 
     
@@ -366,12 +462,14 @@ public final class PKIUtil {
      * @return the private key
      * @throws GeneralSecurityException in case of error
      */
-    public PrivateKey getDSAPrivateKey(byte[] buffer) throws GeneralSecurityException {
-        if (buffer == null || buffer.length == 0) {
+    public PrivateKey getDSAPrivateKey(ByteArray buffer) throws GeneralSecurityException {
+        if (buffer == null || buffer.length() == 0) {
             return null;
         }
         
-        PKCS8EncodedKeySpec privKeySpec = new PKCS8EncodedKeySpec(Base64.getDecoder().decode(buffer));
+        ByteArray normalizedData = normalizeDSAPKCS8(buffer);
+
+        PKCS8EncodedKeySpec privKeySpec = new PKCS8EncodedKeySpec(Base64.getDecoder().decode(normalizedData.toBytes()));
         LOG.debug("File format of private key is: " + privKeySpec.getFormat());
         KeyFactory keyFactory = KeyFactory.getInstance("DSA");
         return keyFactory.generatePrivate(privKeySpec);
@@ -438,6 +536,57 @@ public final class PKIUtil {
         return privateKey;
     }
 
+    
+    /**
+     * Reads PKCS#8 formated private key from a file, which are each bounded at the beginning by
+     * <code>-----BEGIN EC PRIVATE KEY-----</code>, and bounded at the end by
+     * <code>-----END EC PRIVATE KEY-----</code>.
+     * 
+     * @param fileName the file to read
+     * @return the private key
+     * @throws IOException in case of error
+     * @throws GeneralSecurityException in case of error
+     */
+    public PrivateKey getECPrivateKey(String fileName)
+            throws IOException, GeneralSecurityException {
+        if (fileName == null) {
+            return null;
+        }
+        
+        LOG.debug("Loading EC private key form file '" + fileName + "'...");
+        InputStream keyfis = new BufferedInputStream(new FileInputStream(new File(fileName)));
+        byte[] encKey = new byte[keyfis.available()];
+        keyfis.read(encKey);
+        keyfis.close();
+
+        return getECPrivateKey(new ByteArray(encKey));
+    }
+
+    
+    /**
+     * Reads PKCS#8 formated EC private key from a buffer,
+     * which are each bounded at the beginning by
+     * <code>-----BEGIN EC PRIVATE KEY-----</code>, and bounded at the end by
+     * <code>-----END EC PRIVATE KEY-----</code>.
+     *
+     * @param buffer the private key to encode
+     * @return the private key
+     * @throws GeneralSecurityException in case of error
+     */
+    public PrivateKey getECPrivateKey(ByteArray buffer) throws GeneralSecurityException {
+        if (buffer == null || buffer.length() == 0) {
+            return null;
+        }
+        
+        ByteArray normalizedData = normalizeECPKCS8(buffer);
+
+        PKCS8EncodedKeySpec privKeySpec = new PKCS8EncodedKeySpec(Base64.getDecoder().decode(normalizedData.toBytes()));
+        LOG.debug("File format of EC private key is: " + privKeySpec.getFormat());
+        PrivateKey privateKey = KeyFactory.getInstance("EC").generatePrivate(privKeySpec);
+        LOG.debug("File format of EC private key is: " + privateKey.getFormat());
+        return privateKey;
+    }
+
 
     /**
      * Formats a public key into a well formed private key, which
@@ -455,6 +604,8 @@ public final class PKIUtil {
             return formatDSAPublicKey(publicKey).toString();
         } else if ("RSA".equals(publicKey.getAlgorithm())) {
             return formatRSAPublicKey(publicKey).toString();
+        } else if ("EC".equals(publicKey.getAlgorithm())) {
+            return formatECPublicKey(publicKey).toString();
         }
 
         ByteArray rawData = new ByteArray(Base64.getEncoder().encode(publicKey.getEncoded()));
@@ -463,7 +614,7 @@ public final class PKIUtil {
 
 
     /**
-     * Formats a public dsa key into a well formated X509 certificate (PEM format), which are each bounded at the beginning by
+     * Formats a public DSA key into a well formated X509 certificate (PEM format), which are each bounded at the beginning by
      * <code>-----BEGIN DSA PUBLIC KEY-----</code>,
      * and bounded at the end by <code>-----END DSA PUBLIC KEY-----</code>.
      *
@@ -476,7 +627,7 @@ public final class PKIUtil {
 
     
     /**
-     * Formats a public rsa key into a well formated
+     * Formats a public RSA key into a well formated
      * X509 certificate (PEM format), which are each bounded at the beginning by
      * <code>-----BEGIN RSA PUBLIC KEY-----</code>,
      * and bounded at the end by <code>-----END RSA PUBLIC KEY-----</code>.
@@ -486,6 +637,20 @@ public final class PKIUtil {
      */
     public String formatRSAPublicKey(PublicKey publicKey) {
         return formatBuffer(new ByteArray(Base64.getEncoder().encode(publicKey.getEncoded())), 64, PUBLIC_RSA_KEY_START, PUBLIC_RSA_KEY_END).toString();
+    }
+
+    
+    /**
+     * Formats a public EC key into a well formated
+     * X509 certificate (PEM format), which are each bounded at the beginning by
+     * <code>-----BEGIN EC PUBLIC KEY-----</code>,
+     * and bounded at the end by <code>-----END EC PUBLIC KEY-----</code>.
+     *
+     * @param publicKey the public key to format
+     * @return the well formed certificate
+     */
+    public String formatECPublicKey(PublicKey publicKey) {
+        return formatBuffer(new ByteArray(Base64.getEncoder().encode(publicKey.getEncoded())), 64, PUBLIC_EC_KEY_START, PUBLIC_EC_KEY_END).toString();
     }
 
     
@@ -565,6 +730,8 @@ public final class PKIUtil {
             return formatDSAPKCS8(rawData).toString();
         } else if ("RSA".equals(privateKey.getAlgorithm())) {
             return formatRSAPKCS8(rawData).toString();
+        } else if ("EC".equals(privateKey.getAlgorithm())) {
+            return formatECPKCS8(rawData).toString();
         }
         
         return formatBuffer(rawData, 64, "", "").toString();
@@ -572,7 +739,7 @@ public final class PKIUtil {
 
     
     /**
-     * Formats a raw base64 encoded PKCS8 to a well formed private key, which
+     * Formats a raw base64 encoded PKCS8 DSA to a well formed private key, which
      * is bounded at the beginning by
      * <code>-----BEGIN DSA PRIVATE KEY-----</code>,
      * and bounded at the end by <code>-----END DSA PRIVATE KEY-----</code>.
@@ -586,7 +753,7 @@ public final class PKIUtil {
 
     
     /**
-     * Formats a raw base64 encoded PKCS8 to a well formed private key, which
+     * Formats a raw base64 encoded PKCS8 RSA to a well formed private key, which
      * is bounded at the beginning by
      * <code>-----BEGIN RSA PRIVATE KEY-----</code>,
      * and bounded at the end by <code>-----END RSA PRIVATE KEY-----</code>.
@@ -600,7 +767,21 @@ public final class PKIUtil {
 
     
     /**
-     * Normalize a raw base64 encoded PKCS8 to a well formed private key.
+     * Formats a raw base64 encoded PKCS8 EC to a well formed private key, which
+     * is bounded at the beginning by
+     * <code>-----BEGIN EC PRIVATE KEY-----</code>,
+     * and bounded at the end by <code>-----END EC PRIVATE KEY-----</code>.
+     *
+     * @param rawData the raw data to format
+     * @return the well formed certificate
+     */
+    public ByteArray formatECPKCS8(ByteArray rawData) {
+        return formatBuffer(rawData, 64, PRIVATE_EC_KEY_START, PRIVATE_EC_KEY_END);
+    }
+
+    
+    /**
+     * Normalize a raw base64 encoded PKCS8 DSA to a well formed private key.
      *
      * @param rawData the raw data to normalize
      * @return the normalized private key
@@ -611,13 +792,24 @@ public final class PKIUtil {
 
     
     /**
-     * Normalize a raw base64 encoded PKCS8 to a well formed private key.
+     * Normalize a raw base64 encoded PKCS8 RSA to a well formed private key.
      *
      * @param rawData the raw data to normalize
      * @return the normalized private key
      */
     public ByteArray normalizeRSAPKCS8(ByteArray rawData) {
         return normalizeBuffer(rawData, PRIVATE_RSA_KEY_START, PRIVATE_RSA_KEY_END);
+    }
+
+    
+    /**
+     * Normalize a raw base64 encoded PKCS8 EC to a well formed private key.
+     *
+     * @param rawData the raw data to normalize
+     * @return the normalized private key
+     */
+    public ByteArray normalizeECPKCS8(ByteArray rawData) {
+        return normalizeBuffer(rawData, PRIVATE_EC_KEY_START, PRIVATE_EC_KEY_END);
     }
 
 

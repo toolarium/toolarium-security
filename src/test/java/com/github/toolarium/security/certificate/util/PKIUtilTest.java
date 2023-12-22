@@ -13,7 +13,9 @@ import com.github.toolarium.common.ByteArray;
 import java.io.DataInputStream;
 import java.io.FileInputStream;
 import java.nio.file.Paths;
+import java.security.KeyPair;
 import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.security.cert.X509Certificate;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -103,7 +105,7 @@ public class PKIUtilTest {
         String cert1 = PKIUtil.getInstance().formatPKCS7(new ByteArray(TEST_CERT)).toString();
 
         String cert2 = PKIUtil.getInstance().formatPKCS7(new ByteArray(TEST_CERT)).toString();
-        ByteArray  result = PKIUtil.getInstance().formatPKCS7(new ByteArray(cert1 + "\n" + cert2));
+        ByteArray result = PKIUtil.getInstance().formatPKCS7(new ByteArray(cert1 + "\n" + cert2));
      
         String cert3 = PKIUtil.PUBLIC_CERTIFICATE_START + "\n" + insertCharacter(TEST_CERT, 64, ' ') + "\n" + PKIUtil.PUBLIC_CERTIFICATE_END;
         ByteArray testCertificateChain = PKIUtil.getInstance().formatPKCS7(new ByteArray(cert3 + "\n" + cert3));
@@ -121,7 +123,87 @@ public class PKIUtilTest {
         PKIUtil.getInstance().processCertificate(LOG::debug, null, certificates);
         assertEquals(result.toString(), certificateChainContent);
     }
+
     
+    /**
+     * Test
+     * 
+     * @throws Exception in case of error
+     */
+    @Test
+    public void testFormatRSAKey() throws Exception {
+        KeyPair keyPair = PKIUtil.getInstance().generateKeyPair("RSA", 2048);
+        PrivateKey privateKey = keyPair.getPrivate();
+        PublicKey publicKey = keyPair.getPublic();
+        PKIUtil.getInstance().processPrivateKeyInfo(LOG::debug, null, privateKey);
+        PKIUtil.getInstance().processPublicKeyInfo(LOG::debug, null, publicKey);
+
+        String privateKeyString = PKIUtil.getInstance().formatPrivateKey(privateKey);
+        LOG.debug("Private key:" + privateKeyString);
+        String publicKeyString = PKIUtil.getInstance().formatPublicKey(publicKey);
+        LOG.debug("Public key:" + publicKeyString);
+
+        PrivateKey privateKey2 = PKIUtil.getInstance().getRSAPrivateKey(new ByteArray(privateKeyString));
+        PublicKey publicKey2 = PKIUtil.getInstance().getRSAPublicKey(new ByteArray(publicKeyString));
+
+        assertEquals(privateKey, privateKey2);
+        assertEquals(publicKey, publicKey2);
+    }
+
+    
+    /**
+     * Test
+     * 
+     * @throws Exception in case of error
+     */
+    @Test
+    public void testFormatDSAKey() throws Exception {
+        KeyPair keyPair = PKIUtil.getInstance().generateKeyPair("DSA", 2048);
+        PrivateKey privateKey = keyPair.getPrivate();
+        PublicKey publicKey = keyPair.getPublic();
+        PKIUtil.getInstance().processPrivateKeyInfo(LOG::debug, null, privateKey);
+        PKIUtil.getInstance().processPublicKeyInfo(LOG::debug, null, publicKey);
+
+        String privateKeyString = PKIUtil.getInstance().formatPrivateKey(privateKey);
+        LOG.debug("Private key:" + privateKeyString);
+        String publicKeyString = PKIUtil.getInstance().formatPublicKey(publicKey);
+        LOG.debug("Public key:" + publicKeyString);
+
+        PrivateKey privateKey2 = PKIUtil.getInstance().getDSAPrivateKey(new ByteArray(privateKeyString));
+        PublicKey publicKey2 = PKIUtil.getInstance().getDSAPublicKey(new ByteArray(publicKeyString));
+
+        PKIUtil.getInstance().processPrivateKeyInfo(LOG::debug, null, privateKey);
+
+        assertEquals(privateKey, privateKey2);
+        assertEquals(publicKey, publicKey2);
+    }
+
+    
+    /**
+     * Test
+     * 
+     * @throws Exception in case of error
+     */
+    @Test
+    public void testFormatECKey() throws Exception {
+        KeyPair keyPair = PKIUtil.getInstance().generateKeyPair("EC", 256);
+        PrivateKey privateKey = keyPair.getPrivate();
+        PublicKey publicKey = keyPair.getPublic();
+        PKIUtil.getInstance().processPrivateKeyInfo(LOG::debug, null, privateKey);
+        PKIUtil.getInstance().processPublicKeyInfo(LOG::debug, null, publicKey);
+
+        String privateKeyString = PKIUtil.getInstance().formatPrivateKey(privateKey);
+        LOG.debug("Private key:" + privateKeyString);
+        String publicKeyString = PKIUtil.getInstance().formatPublicKey(publicKey);
+        LOG.debug("Public key:" + publicKeyString);
+
+        PrivateKey privateKey2 = PKIUtil.getInstance().getECPrivateKey(new ByteArray(privateKeyString));
+        PublicKey publicKey2 = PKIUtil.getInstance().getECPublicKey(new ByteArray(publicKeyString));
+
+        assertEquals(privateKey, privateKey2);
+        assertEquals(publicKey, publicKey2);
+    }
+
     
     /**
      * Test

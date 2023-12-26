@@ -7,7 +7,7 @@ package com.github.toolarium.security.keystore;
 
 import com.github.toolarium.common.security.ISecuredValue;
 import com.github.toolarium.common.security.SecuredValue;
-import com.github.toolarium.security.certificate.X509CertificateGenerator;
+import com.github.toolarium.security.certificate.CertificateUtilFactory;
 import com.github.toolarium.security.certificate.dto.CertificateStore;
 import com.github.toolarium.security.keystore.dto.IKeyStoreConfiguration;
 import com.github.toolarium.security.keystore.dto.KeyStoreConfiguration;
@@ -78,7 +78,7 @@ public final class SecurityManagerProviderFactory {
      */
     public ISecurityManagerProvider getSecurityManagerProvider(String certificateStoreAlias, String keyStorePassword) {
         try {
-            CertificateStore certificateStore = X509CertificateGenerator.getInstance().createCreateCertificate(certificateStoreAlias);
+            CertificateStore certificateStore = CertificateUtilFactory.getInstance().getGenerator().createCreateCertificate(certificateStoreAlias);
             final KeyStore keyManagerStore = certificateStore.toKeyStore(certificateStoreAlias, keyStorePassword);
             //final KeyStore trustManagerKeyStore = KeyStoreUtil.getInstance().getDefaultTrustKeyStore();
 

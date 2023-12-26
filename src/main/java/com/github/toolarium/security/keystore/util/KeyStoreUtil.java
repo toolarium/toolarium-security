@@ -7,7 +7,7 @@ package com.github.toolarium.security.keystore.util;
 
 import com.github.toolarium.common.security.ISecuredValue;
 import com.github.toolarium.security.certificate.dto.CertificateStore;
-import com.github.toolarium.security.certificate.util.PKIUtil;
+import com.github.toolarium.security.pki.util.PKIUtil;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;

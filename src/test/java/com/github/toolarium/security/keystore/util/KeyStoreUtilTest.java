@@ -10,9 +10,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.github.toolarium.common.security.ISecuredValue;
 import com.github.toolarium.common.security.SecuredValue;
-import com.github.toolarium.security.certificate.X509CertificateGenerator;
+import com.github.toolarium.security.certificate.CertificateUtilFactory;
 import com.github.toolarium.security.certificate.dto.CertificateStore;
-import com.github.toolarium.security.certificate.util.PKIUtil;
+import com.github.toolarium.security.pki.util.PKIUtil;
 import java.io.FileOutputStream;
 import java.nio.file.Paths;
 import java.security.KeyPair;
@@ -57,7 +57,7 @@ public class KeyStoreUtilTest {
         assertEquals("pkcs12", ks.getType());
 
         // create new certificate
-        CertificateStore certificateStore = X509CertificateGenerator.getInstance().createCreateCertificate("myCertificate");
+        CertificateStore certificateStore = CertificateUtilFactory.getInstance().getGenerator().createCreateCertificate("myCertificate");
         assertNotNull(certificateStore);
         assertNotNull(certificateStore.getCertificates());
 
@@ -82,7 +82,7 @@ public class KeyStoreUtilTest {
         assertEquals("pkcs12", ks1.getType());
 
         // create new certificate
-        CertificateStore certificateStore = X509CertificateGenerator.getInstance().createCreateCertificate("myCertificate");
+        CertificateStore certificateStore = CertificateUtilFactory.getInstance().getGenerator().createCreateCertificate("myCertificate");
         assertNotNull(certificateStore);
         assertNotNull(certificateStore.getCertificates());
 

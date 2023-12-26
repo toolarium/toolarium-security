@@ -6,7 +6,8 @@
 package com.github.toolarium.security.keystore.impl;
 
 import com.github.toolarium.common.stacktrace.StackTrace;
-import com.github.toolarium.security.certificate.util.PKIUtil;
+import com.github.toolarium.security.certificate.CertificateUtilFactory;
+import com.github.toolarium.security.pki.util.PKIUtil;
 import java.security.SignatureException;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateExpiredException;
@@ -99,7 +100,7 @@ public class ToolariumTrustManager implements javax.net.ssl.X509TrustManager {
         // check if the server certificate should be added or not
         for (int i = 0; i < chain.length; i++) {
             if (LOG.isDebugEnabled()) {
-                LOG.debug("Server certificate #" + (i + 1) + ": \n" + PKIUtil.getInstance().formatPKCS7(chain[i]));
+                LOG.debug("Server certificate #" + (i + 1) + ": \n" + CertificateUtilFactory.getInstance().getConverter().formatPKCS7(chain[i]));
             }
             
             if (trustServerCertificate(chain[i])) {
@@ -232,7 +233,7 @@ public class ToolariumTrustManager implements javax.net.ssl.X509TrustManager {
             StackTrace.processStackTrace(LOG::warn, StackTrace.DEFAULT_EXCLUDES, "Unknown CA, Server Certificate Verification: ", 3);
                 
             if (LOG.isDebugEnabled()) {
-                LOG.debug("Unknown CA, Server Certificate for '" + dn + "':\n" + PKIUtil.getInstance().formatPKCS7(cert));
+                LOG.debug("Unknown CA, Server Certificate for '" + dn + "':\n" + CertificateUtilFactory.getInstance().getConverter().formatPKCS7(cert));
             }
 
             throw new CertificateException("Unknown CA, Server Certificate Verification!");
@@ -292,7 +293,7 @@ public class ToolariumTrustManager implements javax.net.ssl.X509TrustManager {
     protected void checkCertificateChain(X509Certificate[] chain) throws CertificateException {
         try {
             // verify that the subject certificate has been properly signed by the issuer
-            PKIUtil.getInstance().verifyCertificateChain(LOG::debug, chain);
+            CertificateUtilFactory.getInstance().getVerifier().verifyCertificateChain(LOG::debug, chain);
         } catch (SignatureException ex) {
             certCheckResult = CERT_INVALIDSIGNATURE;
             StackTrace.processStackTrace(LOG::warn, StackTrace.DEFAULT_EXCLUDES, "Certificate Expired on Server Certificate Verification: ", 3);

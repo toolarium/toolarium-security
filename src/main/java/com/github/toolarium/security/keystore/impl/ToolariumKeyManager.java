@@ -5,7 +5,7 @@
  */
 package com.github.toolarium.security.keystore.impl;
 
-import com.github.toolarium.security.certificate.util.PKIUtil;
+import com.github.toolarium.security.pki.util.PKIUtil;
 import java.net.Socket;
 import java.security.Principal;
 import java.security.PrivateKey;

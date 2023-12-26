@@ -7,8 +7,9 @@ package com.github.toolarium.security.certificate.dto;
 
 import com.github.toolarium.common.security.ISecuredValue;
 import com.github.toolarium.common.security.SecuredValue;
-import com.github.toolarium.security.certificate.util.PKIUtil;
+import com.github.toolarium.security.certificate.CertificateUtilFactory;
 import com.github.toolarium.security.keystore.util.KeyStoreUtil;
+import com.github.toolarium.security.pki.KeyConverterFactory;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -147,7 +148,7 @@ public class CertificateStore implements Serializable {
      * @throws IOException In case of an I/O issue
      */
     public X509Certificate[] writeCertificate(String fileName) throws GeneralSecurityException, IOException {
-        write(prepareFilename(fileName, ".crt"), PKIUtil.getInstance().formatPKCS7(certificates));
+        write(prepareFilename(fileName, ".crt"), CertificateUtilFactory.getInstance().getConverter().formatPKCS7(certificates));
         return certificates;
     }
 
@@ -162,7 +163,7 @@ public class CertificateStore implements Serializable {
      */
     public PublicKey writePublicKey(String fileName) throws GeneralSecurityException, IOException {
         PublicKey publicKey = keypair.getPublic();
-        write(prepareFilename(fileName, ".pub"), PKIUtil.getInstance().formatPublicKey(publicKey));
+        write(prepareFilename(fileName, ".pub"), KeyConverterFactory.getInstance().getConverter(publicKey).formatPublicKey(publicKey));
         return publicKey;
     }
 
@@ -177,7 +178,7 @@ public class CertificateStore implements Serializable {
      */
     public PrivateKey writePrivateKey(String fileName) throws GeneralSecurityException, IOException {
         PrivateKey privateKey = keypair.getPrivate();
-        write(prepareFilename(fileName, ".pem"), PKIUtil.getInstance().formatPrivateKey(privateKey));
+        write(prepareFilename(fileName, ".pem"), KeyConverterFactory.getInstance().getConverter(privateKey).formatPrivateKey(privateKey));
         return privateKey;
     }
 

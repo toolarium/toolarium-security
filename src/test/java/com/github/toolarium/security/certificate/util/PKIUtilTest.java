@@ -70,6 +70,7 @@ public class PKIUtilTest {
      * 
      * @throws Exception in case of error
      */
+    @SuppressWarnings("deprecation")
     @Test
     public void testFormatCertificate() throws Exception {
         DataInputStream dis = new DataInputStream(new FileInputStream(Paths.get(TEST_RESOURCE_PATH, TEST_CERTFILE).toFile()));
@@ -101,6 +102,7 @@ public class PKIUtilTest {
      * @throws Exception in case of error
      */
     @Test
+    @SuppressWarnings("deprecation")
     public void testFormatCertificateChain() throws Exception {
         String cert1 = PKIUtil.getInstance().formatPKCS7(new ByteArray(TEST_CERT)).toString();
 
@@ -130,6 +132,7 @@ public class PKIUtilTest {
      * 
      * @throws Exception in case of error
      */
+    @SuppressWarnings("deprecation")
     @Test
     public void testFormatRSAKey() throws Exception {
         KeyPair keyPair = PKIUtil.getInstance().generateKeyPair("RSA", 2048);
@@ -156,6 +159,7 @@ public class PKIUtilTest {
      * 
      * @throws Exception in case of error
      */
+    @SuppressWarnings("deprecation")
     @Test
     public void testFormatDSAKey() throws Exception {
         KeyPair keyPair = PKIUtil.getInstance().generateKeyPair("DSA", 2048);
@@ -184,6 +188,7 @@ public class PKIUtilTest {
      * 
      * @throws Exception in case of error
      */
+    @SuppressWarnings("deprecation")
     @Test
     public void testFormatECKey() throws Exception {
         KeyPair keyPair = PKIUtil.getInstance().generateKeyPair("EC", 256);
@@ -210,6 +215,7 @@ public class PKIUtilTest {
      * 
      * @throws Exception in case of error
      */
+    @SuppressWarnings("deprecation")
     @Test
     public void testReadFileCertificate() throws Exception {
         X509Certificate[] certs = PKIUtil.getInstance().getX509Certificates(Paths.get(TEST_RESOURCE_PATH, TEST_CERTFILE).toString());
@@ -222,6 +228,7 @@ public class PKIUtilTest {
      * 
      * @throws Exception in case of error
      */
+    @SuppressWarnings("deprecation")
     @Test
     public void testReadBufferCertificate() throws Exception {
         X509Certificate[] certs = PKIUtil.getInstance().getX509Certificates(new ByteArray(TEST_CERT));
@@ -234,6 +241,7 @@ public class PKIUtilTest {
      * 
      * @exception Exception in case of error 
      */
+    @SuppressWarnings("deprecation")
     @Test
     public void testParseCertificate() throws Exception {
 
@@ -250,6 +258,7 @@ public class PKIUtilTest {
      * 
      * @throws Exception in case of error
      */
+    @SuppressWarnings("deprecation")
     @Test
     public void testReadPrivateKeyFromFile() throws Exception {
         PrivateKey key = PKIUtil.getInstance().getRSAPrivateKey(Paths.get(TEST_RESOURCE_PATH, TEST_RSA_KEYFILE).toString());
@@ -266,6 +275,7 @@ public class PKIUtilTest {
      * 
      * @throws Exception in case of error
      */
+    @SuppressWarnings("deprecation")
     @Test
     public void testReadPrivateKeyFromBuffer() throws Exception {
         PrivateKey key = PKIUtil.getInstance().getRSAPrivateKey(new ByteArray(TEST_RSA_PRIVATE_KEY));
@@ -278,6 +288,7 @@ public class PKIUtilTest {
      * 
      * @throws Exception in case of error
      */
+    @SuppressWarnings("deprecation")
     @Test
     public void testNormalizePrivateKeyFromBuffer() throws Exception {
         ByteArray data = new ByteArray(TEST_RSA_PRIVATE_KEY);
@@ -293,6 +304,7 @@ public class PKIUtilTest {
      * Check the given certificate chain
      * @param certs the certificates to test
      */
+    @SuppressWarnings("deprecation")
     private void checkCertificates(X509Certificate[] certs) {
         assertNotNull(certs);
         assertTrue(certs.length > 0);

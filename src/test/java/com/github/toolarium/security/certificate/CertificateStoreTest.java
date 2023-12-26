@@ -8,10 +8,9 @@ package com.github.toolarium.security.certificate;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.github.toolarium.security.certificate.dto.CertificateStore;
-import com.github.toolarium.security.certificate.util.CertificateChainAnalyzeUtil;
-import com.github.toolarium.security.certificate.util.PKIUtil;
 import com.github.toolarium.security.certificate.util.PKIUtilTest;
 import com.github.toolarium.security.keystore.util.KeyStoreUtilTest;
+import com.github.toolarium.security.pki.util.PKIUtil;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
@@ -61,7 +60,7 @@ public class CertificateStoreTest {
     public void testWrite() throws GeneralSecurityException, IOException {
         
         // cretae new certificate
-        CertificateStore certificateStore = X509CertificateGenerator.getInstance().createCreateCertificate(PKIUtil.getInstance().generateKeyPair("RSA", 2048), // new RSA 2048 
+        CertificateStore certificateStore = CertificateUtilFactory.getInstance().getGenerator().createCreateCertificate(PKIUtil.getInstance().generateKeyPair(null, "RSA", 2048), // new RSA 2048 
                                                                                                            "myTest",  // dn 
                                                                                                            "aaa",     //
                                                                                                            new Date(),// from now 
@@ -97,40 +96,43 @@ public class CertificateStoreTest {
     @Test
     public void testWriteFromParent() throws GeneralSecurityException, IOException {
 
-        CertificateStore certificateStoreParent1 = X509CertificateGenerator.getInstance().createCreateCertificate(PKIUtil.getInstance().generateKeyPair("RSA", 2048), // new RSA 2048 
-                                                                                                                  null, 
-                                                                                                                  "myParent1",  // dn 
-                                                                                                                  "aaa",     //
-                                                                                                                  new Date(),// from now 
-                                                                                                                  1);        // 1 day
+        CertificateStore certificateStoreParent1 = 
+                CertificateUtilFactory.getInstance().getGenerator().createCreateCertificate(PKIUtil.getInstance().generateKeyPair(null, "RSA", 2048), // new RSA 2048 
+                                                                                            null, 
+                                                                                            "myParent1",  // dn 
+                                                                                            "aaa",     //
+                                                                                            new Date(),// from now 
+                                                                                            1);        // 1 day
 
         /*
-        CertificateStore certificateStoreParent2 = X509CertificateGenerator.getInstance().createCreateCertificate(PKIUtil.getInstance().generateKeyPair("RSA", 2048), // new RSA 2048 
-                                                                                                                  certificateStoreParent1, 
-                                                                                                                  "myParent2",  // dn 
-                                                                                                                  "aaa",     //
-                                                                                                                  new Date(),// from now 
-                                                                                                                  1);        // 1 day
+        CertificateStore certificateStoreParent2 = 
+            CertificateUtilFactory.getInstance().getGenerator().createCreateCertificate(PKIUtil.getInstance().generateKeyPair("RSA", 2048), // new RSA 2048 
+                                                                                            certificateStoreParent1, 
+                                                                                            "myParent2",  // dn 
+                                                                                            "aaa",     //
+                                                                                            new Date(),// from now 
+                                                                                            1);        // 1 day
         */                                                                                                                 
 
         // load parent certificate
         //CertificateStore certificateStoreParent3 = new CertificateStore(Paths.get(PKIUtilTest.TEST_RESOURCE_PATH, PKIUtilTest.PKCS12_TESTFILE).toString(), PKIUtilTest.PKCS12_ALIAS, PKIUtilTest.PKCS12_KEYSTORE_PASSWORD);
         
         // cretae new certificate
-        CertificateStore certificateStore = X509CertificateGenerator.getInstance().createCreateCertificate(PKIUtil.getInstance().generateKeyPair("RSA", 2048), // new RSA 2048 
-                                                                                                           certificateStoreParent1, 
-                                                                                                           "myTest",  // dn 
-                                                                                                           "aaa",     //
-                                                                                                           new Date(),// from now 
-                                                                                                           1);        // 1 day
+        CertificateStore certificateStore = 
+                CertificateUtilFactory.getInstance().getGenerator().createCreateCertificate(PKIUtil.getInstance().generateKeyPair(null, "RSA", 2048), // new RSA 2048 
+                                                                                            certificateStoreParent1, 
+                                                                                            "myTest",  // dn 
+                                                                                            "aaa",     //
+                                                                                            new Date(),// from now 
+                                                                                            1);        // 1 day
         
         assertNotNull(certificateStore);
         assertNotNull(certificateStore.getCertificates());
         assertNotNull(certificateStore.getKeyPair());
 
-        X509Certificate cert = CertificateChainAnalyzeUtil.getInstance().getCertificateFor(certificateStore.getKeyPair().getPublic(), Arrays.asList(certificateStore.getCertificates()));
+        X509Certificate cert = CertificateUtilFactory.getInstance().geChainAnalyzer().getCertificateFor(certificateStore.getKeyPair().getPublic(), Arrays.asList(certificateStore.getCertificates()));
         assertNotNull(cert);
-        List<X509Certificate> l = CertificateChainAnalyzeUtil.getInstance().buildChainFor(certificateStore.getKeyPair().getPublic(), Arrays.asList(certificateStore.getCertificates()));
+        List<X509Certificate> l = CertificateUtilFactory.getInstance().geChainAnalyzer().buildChainFor(certificateStore.getKeyPair().getPublic(), Arrays.asList(certificateStore.getCertificates()));
         assertNotNull(l);
         
         
@@ -155,7 +157,7 @@ public class CertificateStoreTest {
      */
     @Test
     public void testSelfSignedCertifcate() throws GeneralSecurityException, IOException {
-        CertificateStore certificateStore = X509CertificateGenerator.getInstance().createCreateCertificate("myCertificate");
+        CertificateStore certificateStore = CertificateUtilFactory.getInstance().getGenerator().createCreateCertificate("myCertificate");
         assertNotNull(certificateStore);
         assertNotNull(certificateStore.getCertificates());
         assertNotNull(certificateStore.getKeyPair());

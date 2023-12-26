@@ -1,5 +1,5 @@
 [![License](https://img.shields.io/github/license/toolarium/toolarium-security)](https://github.com/toolarium/toolarium-security/blob/master/LICENSE)
-[![Maven Central](https://img.shields.io/maven-central/v/com.github.toolarium/toolarium-security/1.0.4)](https://search.maven.org/artifact/com.github.toolarium/toolarium-security/1.0.4/jar)
+[![Maven Central](https://img.shields.io/maven-central/v/com.github.toolarium/toolarium-security/1.1.0)](https://search.maven.org/artifact/com.github.toolarium/toolarium-security/1.1.0/jar)
 [![javadoc](https://javadoc.io/badge2/com.github.toolarium/toolarium-security/javadoc.svg)](https://javadoc.io/doc/com.github.toolarium/toolarium-security)
 
 # toolarium-security
@@ -21,7 +21,7 @@ We use [SemVer](http://semver.org/) for versioning. For the versions available, 
 
 ```groovy
 dependencies {
-    implementation "com.github.toolarium:toolarium-security:1.0.4"
+    implementation "com.github.toolarium:toolarium-security:1.1.0"
 }
 ```
 
@@ -31,7 +31,7 @@ dependencies {
 <dependency>
     <groupId>com.github.toolarium</groupId>
     <artifactId>toolarium-security</artifactId>
-    <version>1.0.4</version>
+    <version>1.1.0</version>
 </dependency>
 ```
 
@@ -68,6 +68,28 @@ ISecurityManagerProvider securityManagerProvider = SecurityManagerProviderFactor
     SSLContext sslContext = SSLContextFactory.getInstance().createSslContext(securityManagerProvider);
 ```
 
+#### Sign JSON requests accodringly to https://global.alipay.com/docs/ac/gr/signature#d2e38597
+```java
+// add bouncy castle as provider
+Security.addProvider(new BouncyCastleProvider());
+
+final KeyPair keyPair = PKIUtil.getInstance().generateKeyPair("BC", "EC", 256);
+String privateKeyStr = KeyConverterFactory.getInstance().getConverter("EC").formatPrivateKey(keyPair.getPrivate());
+String publicKeyStr = KeyConverterFactory.getInstance().getConverter("EC").formatPublicKey(keyPair.getPublic());
+...
+
+// read key from configuration and convert to objects
+PrivateKey privateKey = KeyConverterFactory.getInstance().getConverter("EC").getPrivateKey(privateKeyStr);
+PublicKey publicKey = KeyConverterFactory.getInstance().getConverter("EC").getPublicKey(publicKeyStr);
+...
+
+// sign JSON
+String jsonResponse = JsonSignatureUtil.getInstance().sign("BC", "SHA256withECDSA", privateKey, content);
+
+// verify: decode signature and compare
+boolean result = JsonSignatureUtil.getInstance().verify("BC", "SHA256withECDSA", publicKey, jsonResponse);
+```
+
 #### Use of the challenge / response util
 ```java
 String provider = null;
@@ -82,3 +104,4 @@ byte[] response = ChallengeResponseUtil.getInstance().generateResponse(provider,
 // verify the response and the challenge
 assertTrue(ChallengeResponseUtil.getInstance().checkResponse(provider, "RSA", keyPair.getPublic(), challenge, response));
 ```
+

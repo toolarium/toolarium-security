@@ -9,8 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.github.toolarium.security.certificate.dto.CertificateStore;
 import com.github.toolarium.security.certificate.impl.CertificateConverter;
+import com.github.toolarium.security.certificate.util.CertificateTestUtil;
 import com.github.toolarium.security.certificate.util.PKIUtilTest;
 import com.github.toolarium.security.pki.util.PKIUtil;
 import com.github.toolarium.security.util.FileUtil;
@@ -18,11 +18,8 @@ import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.cert.X509Certificate;
-import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -169,73 +166,16 @@ public class CertificateConverterTest {
     public void testFiltervalidCertificate() throws GeneralSecurityException {
         KeyPair keyPair = PKIUtil.getInstance().generateKeyPair(null, "RSA", 2048);
         
-        Calendar calendar = Calendar.getInstance();
-        int dayOfYear = calendar.get(Calendar.DAY_OF_YEAR);
-        calendar.set(Calendar.DAY_OF_YEAR, dayOfYear);
-        calendar.getTime();
-        
-        /*             <NOW>
-              -10  -5    0    5    10
-               .    .    .    .    .
-            A  [....]
-            B    [......] 
-            C  [..........]
-            D       [.........]
-            E           [.........]
-            F                      [.........]
-            G                 [.........]
-         */
-        List<X509Certificate> list = new ArrayList<X509Certificate>();
-        list.add(getCertificate(keyPair, "A", calendar.get(Calendar.DAY_OF_YEAR) - 10, 5));
-        list.add(getCertificate(keyPair, "B", calendar.get(Calendar.DAY_OF_YEAR) - 8, 7));
-        list.add(getCertificate(keyPair, "C", calendar.get(Calendar.DAY_OF_YEAR) - 10, 12));
-        list.add(getCertificate(keyPair, "D", calendar.get(Calendar.DAY_OF_YEAR) - 5, 10));
-        list.add(getCertificate(keyPair, "E", calendar.get(Calendar.DAY_OF_YEAR) - 1, 10));
-        list.add(getCertificate(keyPair, "F", calendar.get(Calendar.DAY_OF_YEAR) + 10, 10));
-        list.add(getCertificate(keyPair, "G", calendar.get(Calendar.DAY_OF_YEAR) + 5, 10));
+        List<X509Certificate> list = CertificateTestUtil.getInstance().createSelfSignedCertificates(keyPair);
         Collections.shuffle(list);
-        LOG.debug("==>" + toDNList(list));
+        LOG.debug("==>" + CertificateTestUtil.getInstance().toDNList(list));
 
         List<X509Certificate> expiredList = CertificateUtilFactory.getInstance().getFilter().filterExpired(list);
-        assertEquals("[A, B]", toDNList(expiredList));
+        assertEquals("[A, B]", CertificateTestUtil.getInstance().toDNList(expiredList));
         List<X509Certificate> notYetValidList = CertificateUtilFactory.getInstance().getFilter().filterNotYedValid(list);
-        assertEquals("[G, F]", toDNList(notYetValidList));
+        assertEquals("[G, F]", CertificateTestUtil.getInstance().toDNList(notYetValidList));
         List<X509Certificate> validList = CertificateUtilFactory.getInstance().getFilter().filterValid(list);
-        assertEquals("[C, D, E]", toDNList(validList));
-        
-    }
-
-
-    /**
-     * Convert certificate list to a string expression with DN
-     *
-     * @param list the list
-     * @return the string
-     */
-    private String toDNList(List<X509Certificate> list) {
-        return list
-                .stream()
-                .map(c -> c.getSubjectX500Principal().getName())
-                .collect(Collectors.toList()).toString().replaceAll("CN=", "");
-
-    }
-    
-    
-    /**
-     * Create a certificate
-     *
-     * @param keyPair the key pair
-     * @param dn the dn
-     * @param dayOfYear the day of year
-     * @param days the validity in days
-     * @return the generated certificate
-     * @throws GeneralSecurityException In case of a security exception
-     */
-    private X509Certificate getCertificate(KeyPair keyPair, String dn, int dayOfYear, int days) throws GeneralSecurityException {
-        Calendar calendar = Calendar.getInstance();
-        calendar.set(Calendar.DAY_OF_YEAR, dayOfYear);
-        CertificateStore certificateStore = CertificateUtilFactory.getInstance().getGenerator().createCreateCertificate(keyPair, dn, null, calendar.getTime(), days);
-        return certificateStore.getCertificates()[0];
+        assertEquals("[C, D, E]", CertificateTestUtil.getInstance().toDNList(validList));
     }
 
     

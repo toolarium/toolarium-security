@@ -6,6 +6,7 @@
 package com.github.toolarium.security.keystore.util;
 
 import com.github.toolarium.common.security.ISecuredValue;
+import com.github.toolarium.security.certificate.CertificateUtilFactory;
 import com.github.toolarium.security.certificate.dto.CertificateStore;
 import com.github.toolarium.security.pki.util.PKIUtil;
 import java.io.BufferedInputStream;
@@ -22,6 +23,9 @@ import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
@@ -423,30 +427,6 @@ public final class KeyStoreUtil {
 
     
     /**
-     * Add a certificate chain to the default trust keystore
-     *
-     * @param alias the alias
-     * @param certificateChain the certificate chain
-     * @return the keystore
-     * @throws GeneralSecurityException In case of general security exception
-     * @throws IOException In case of not accessable trust keystore
-     */
-    public KeyStore addCertificateToTrustKeystore(String alias, X509Certificate[] certificateChain) throws GeneralSecurityException, IOException {
-        final KeyStore trustManagerKeyStore = getDefaultTrustKeyStore();
-
-        for (int i = 0; i < certificateChain.length; i++) {
-            // add the key manager store in the trust store
-            trustManagerKeyStore.setCertificateEntry(alias + i, certificateChain[i]);
-            if (LOG.isDebugEnabled()) {
-                PKIUtil.getInstance().processCertificate(LOG::debug, "Add self-signed certificate to trust store:", certificateChain[i]);
-            }
-        }
-        
-        return trustManagerKeyStore;
-    }
-
-    
-    /**
      * Add a certificate to the default trust keystore
      *
      * @param alias the alias
@@ -456,15 +436,62 @@ public final class KeyStoreUtil {
      * @throws IOException In case of not accessable trust keystore
      */
     public KeyStore addCertificateToTrustKeystore(String alias, X509Certificate certificate) throws GeneralSecurityException, IOException {
-        final KeyStore trustManagerKeyStore = getDefaultTrustKeyStore();
+        return addCertificateToTrustKeystore(alias, new X509Certificate[] {certificate});
+    }
 
-        // add the key manager store in the trust store
-        trustManagerKeyStore.setCertificateEntry(alias, certificate);
+    
+    /**
+     * Add a certificate chain to the default trust keystore
+     *
+     * @param alias the alias
+     * @param certificateChain the certificate chain
+     * @return the keystore
+     * @throws GeneralSecurityException In case of general security exception
+     * @throws IOException In case of not accessable trust keystore
+     */
+    public KeyStore addCertificateToTrustKeystore(String alias, X509Certificate[] certificateChain) throws GeneralSecurityException, IOException {
         if (LOG.isDebugEnabled()) {
-            PKIUtil.getInstance().processCertificate(LOG::debug, "Add self-signed certificate to trust store:", certificate);
+            LOG.debug("Add self-signed certificate to trust store with alias " + alias + "...");
         }
         
-        return trustManagerKeyStore;
+        return addCertificateToKeystore(getDefaultTrustKeyStore(), alias, certificateChain);
+    }
+
+    
+    /**
+     * Add a certificate chain to the keystore
+     *
+     * @param keyStore the key store
+     * @param inputAlias the alias
+     * @param certificateChain the certificate chain
+     * @return the keystore
+     * @throws GeneralSecurityException In case of general security exception
+     * @throws IOException In case of not accessable trust keystore
+     */
+    public KeyStore addCertificateToKeystore(KeyStore keyStore, String inputAlias, X509Certificate[] certificateChain) throws GeneralSecurityException, IOException {
+        if (keyStore != null && certificateChain != null) {
+            String alias = inputAlias;
+            if (alias == null) {
+                alias = "";
+            }
+            
+            // get certificate
+            if (keyStore != null && certificateChain != null) {
+                List<X509Certificate> list = new ArrayList<X509Certificate>();
+                list.addAll(CertificateUtilFactory.getInstance().getFilter().filterValid(Arrays.asList(certificateChain)));
+                list.addAll(CertificateUtilFactory.getInstance().getFilter().filterNotYedValid(Arrays.asList(certificateChain)));
+            
+                for (int i = 0; i < list.size(); i++) {
+                    // add the key manager store in the store
+                    keyStore.setCertificateEntry(alias + i, list.get(i));
+                    if (LOG.isDebugEnabled()) {
+                        PKIUtil.getInstance().processCertificate(LOG::debug, "Add certificate to key store:", list.get(i));
+                    }
+                }
+            }
+        }
+        
+        return keyStore;
     }
 
     

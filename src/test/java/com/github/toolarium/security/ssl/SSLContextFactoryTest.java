@@ -90,7 +90,7 @@ public class SSLContextFactoryTest {
         SSLEchoService sslEchoService = startSSLEchoService(securityManagerProvider, testPort);
 
         SSLContext sslContext = SSLContext.getInstance("TLS");
-        sslContext.init(securityManagerProvider.getKeyManagers(), KeyStoreUtil.getInstance().getTrustAllCertificateManager(), SecureRandom.getInstanceStrong()); 
+        sslContext.init(null, KeyStoreUtil.getInstance().getTrustAllCertificateManager(), SecureRandom.getInstanceStrong()); 
 
         runTestAndEndup(sslContext, testPort, sslEchoService);
     }

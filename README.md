@@ -47,7 +47,7 @@ byte[] digest2 = CryptoHashUtil.getInstance().createHash(/*provider*/null, "SHA-
 ```java
 // create new certificate
 CertificateStore certificateStore = 
-    X509CertificateGenerator.getInstance().createCreateCertificate(
+    CertificateUtilFactory.getInstance().getGenerator().createCreateCertificate(
         PKIUtil.getInstance().generateKeyPair("RSA", 2048), "MyCertificate", "localhost", new Date(), 2 * 365);  // from now until 2 years  
 
 certificateStore.write("mypkc12-cert.p12", "alias", "password");

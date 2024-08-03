@@ -18,12 +18,14 @@ import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.cert.X509Certificate;
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.TrustManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
 /**
- * Defines the security manager provider factory
+ * Defines the security manager provider factory. The {@link ISecurityManagerProvider} contains the {@link KeyManager} and the {@link TrustManager}.
  *  
  * @author patrick
  */
@@ -60,7 +62,7 @@ public final class SecurityManagerProviderFactory {
 
     
     /**
-     * Get the security manager provider with self signed certificate and added to the trust store. 
+     * Get the security manager provider with self-signed certificate and added to the trust store. 
      *
      * @return the security manager provider
      */
@@ -70,21 +72,81 @@ public final class SecurityManagerProviderFactory {
     
     
     /**
-     * Get the security manager provider with self signed certificate and added to the trust store. 
+     * Get the security manager provider with self-signed certificate and added to the trust store. 
      * 
      * @param certificateStoreAlias the certificate store alias
-     * @param keyStorePassword the keystore password
+     * @param keyStorePassword the key store password
      * @return the security manager provider
      */
     public ISecurityManagerProvider getSecurityManagerProvider(String certificateStoreAlias, String keyStorePassword) {
-        try {
-            CertificateStore certificateStore = CertificateUtilFactory.getInstance().getGenerator().createCreateCertificate(certificateStoreAlias);
-            final KeyStore keyManagerStore = certificateStore.toKeyStore(certificateStoreAlias, keyStorePassword);
-            //final KeyStore trustManagerKeyStore = KeyStoreUtil.getInstance().getDefaultTrustKeyStore();
+        return getSecurityManagerProvider(null, null, certificateStoreAlias, keyStorePassword);
+    }
 
-            X509Certificate selfSignedCertificate = (X509Certificate)keyManagerStore.getCertificate(certificateStoreAlias);
-            final KeyStore trustManagerKeyStore = KeyStoreUtil.getInstance().addCertificateToTrustKeystore(certificateStoreAlias, selfSignedCertificate);
-            return new SecurityManagerProviderImpl(trustManagerKeyStore, keyManagerStore, new SecuredValue<String>(keyStorePassword, "..."));
+    
+    /**
+     * Get the security manager provider with self-signed certificate and added to the trust store. 
+     * 
+     * @param keyStoreFile the key store file or null. In case of null, it will be created only in memory; otherwise the created key store will be saved.
+     * @param provider the provider or null
+     * @param keyStorePassword the key store password
+     * @param certificateStoreAlias the certificate store alias
+     * @return the security manager provider
+     */
+    public ISecurityManagerProvider getSecurityManagerProvider(String keyStoreFile, String provider, String keyStorePassword, String certificateStoreAlias) {
+        try {
+            // create key store
+            CertificateStore certificateStore = CertificateUtilFactory.getInstance().getGenerator().createCreateCertificate(certificateStoreAlias);
+            final KeyStore keyStore = certificateStore.toKeyStore(certificateStoreAlias, keyStorePassword);
+
+            if (keyStoreFile != null) {
+                KeyStoreUtil.getInstance().writePKCS12KeyStore(keyStoreFile, provider, certificateStoreAlias, certificateStore.getKeyPair().getPrivate(), certificateStore.getCertificates(), new SecuredValue<String>(keyStorePassword));
+            }
+
+            return getSecurityManagerProvider(keyStore, keyStorePassword, certificateStoreAlias);
+        } catch (IOException | GeneralSecurityException e) {
+            LOG.warn("Could not create certificate: " + e.getMessage(), e);
+            return null;
+        }
+    }
+
+    
+    /**
+     * Get the key store file and added the certificate to the trust store. 
+     * 
+     * @param keyStoreFile the key store file
+     * @param type the key store type
+     * @param provider the provider or null
+     * @param keyStorePassword the key store password
+     * @param certificateStoreAlias the certificate store alias
+     * @return the security manager provider
+     */
+    public ISecurityManagerProvider getSecurityManagerProvider(String keyStoreFile, String type, String provider, String keyStorePassword, String certificateStoreAlias) {
+        try {
+            final KeyStore keyStore = KeyStoreUtil.getInstance().readKeyStore(keyStoreFile, type, provider, new SecuredValue<String>(keyStorePassword));
+            return getSecurityManagerProvider(keyStore, keyStorePassword, certificateStoreAlias);
+        } catch (IOException | GeneralSecurityException e) {
+            LOG.warn("Could not create certificate: " + e.getMessage(), e);
+            return null;
+        }
+    }
+
+    
+    /**
+     * Get the key store file and added the certificate to the trust store. 
+     * 
+     * @param keyStore the key store
+     * @param keyStorePassword the key store password
+     * @param certificateStoreAlias the certificate store alias
+     * @return the security manager provider
+     */
+    public ISecurityManagerProvider getSecurityManagerProvider(KeyStore keyStore, String keyStorePassword, String certificateStoreAlias) {
+        try {
+            // get certificate
+            X509Certificate selfSignedCertificate = (X509Certificate)keyStore.getCertificate(certificateStoreAlias);
+
+            // get trust manager and add the self-signed certificate 
+            final KeyStore trustKeyStore = KeyStoreUtil.getInstance().addCertificateToTrustKeystore(certificateStoreAlias, selfSignedCertificate);
+            return new SecurityManagerProviderImpl(trustKeyStore, keyStore, new SecuredValue<String>(keyStorePassword, "..."));
         } catch (IOException | GeneralSecurityException e) {
             LOG.warn("Could not create certificate: " + e.getMessage(), e);
             return null;
@@ -96,12 +158,12 @@ public final class SecurityManagerProviderFactory {
      * Get the security manager provider
      *
      * @param trustKeyStore the trust key store
-     * @param keyManagerKeyStore the key manager store
-     * @param keyManagerStorePassword the key manager store password
+     * @param keyStore the key store
+     * @param keyStorePassword the key store password
      * @return the security manager provider
      */
-    public ISecurityManagerProvider getSecurityManagerProvider(KeyStore trustKeyStore, KeyStore keyManagerKeyStore, ISecuredValue<String> keyManagerStorePassword) {
-        return new SecurityManagerProviderImpl(trustKeyStore, keyManagerKeyStore, keyManagerStorePassword);
+    public ISecurityManagerProvider getSecurityManagerProvider(KeyStore trustKeyStore, KeyStore keyStore, ISecuredValue<String> keyStorePassword) {
+        return new SecurityManagerProviderImpl(trustKeyStore, keyStore, keyStorePassword);
     }
 
     
@@ -109,15 +171,15 @@ public final class SecurityManagerProviderFactory {
      * Get the security manager provider
      *
      * @param trustKeyStoreFile the trust key store file or null to use the default
-     * @param keyManagerKeyStoreFile the key manager store file
-     * @param keyManagerStorePassword the key manager store password
+     * @param keyStoreFile the key store file
+     * @param keyStorePassword the key store password
      * @return the security manager provider
      * @throws IOException in case of a file read error
      * @throws GeneralSecurityException in case of error
      */
-    public ISecurityManagerProvider getSecurityManagerProvider(File trustKeyStoreFile, File keyManagerKeyStoreFile, ISecuredValue<String> keyManagerStorePassword)
+    public ISecurityManagerProvider getSecurityManagerProvider(File trustKeyStoreFile, File keyStoreFile, ISecuredValue<String> keyStorePassword)
             throws GeneralSecurityException, IOException {
-        return getSecurityManagerProvider(trustKeyStoreFile, keyManagerKeyStoreFile, keyManagerStorePassword, null); 
+        return getSecurityManagerProvider(trustKeyStoreFile, keyStoreFile, keyStorePassword, null); 
     }
 
     
@@ -125,16 +187,16 @@ public final class SecurityManagerProviderFactory {
      * Get the security manager provider
      *
      * @param trustKeyStoreFile the trust key store file or null to use the default
-     * @param keyManagerKeyStoreFile the key manager store file
-     * @param keyManagerStorePassword the key manager store password
+     * @param keyStoreFile the key store file
+     * @param keyStorePassword the key store password
      * @param keyStoreType the key store type or null
      * @return the security manager provider
      * @throws IOException in case of a file read error
      * @throws GeneralSecurityException in case of error
      */
-    public ISecurityManagerProvider getSecurityManagerProvider(File trustKeyStoreFile, File keyManagerKeyStoreFile, ISecuredValue<String> keyManagerStorePassword, String keyStoreType)
+    public ISecurityManagerProvider getSecurityManagerProvider(File trustKeyStoreFile, File keyStoreFile, ISecuredValue<String> keyStorePassword, String keyStoreType)
             throws GeneralSecurityException, IOException {
-        return getSecurityManagerProvider(new KeyStoreConfiguration(trustKeyStoreFile, null, keyStoreType, null, null), new KeyStoreConfiguration(keyManagerKeyStoreFile, null, keyStoreType, null, keyManagerStorePassword)); 
+        return getSecurityManagerProvider(new KeyStoreConfiguration(trustKeyStoreFile, null, keyStoreType, null, null), new KeyStoreConfiguration(keyStoreFile, null, keyStoreType, null, keyStorePassword)); 
     }
 
 
@@ -142,12 +204,12 @@ public final class SecurityManagerProviderFactory {
      * Get the security manager provider
      *
      * @param trustKeyStoreConfiguration the trust key store configuration or null to use the default
-     * @param keyManagerKeyStoreConfiguration the key manager store file
+     * @param keyStoreConfiguration the key store file
      * @return the security manager provider
      * @throws IOException in case of a file read error
      * @throws GeneralSecurityException in case of error
      */
-    public ISecurityManagerProvider getSecurityManagerProvider(IKeyStoreConfiguration trustKeyStoreConfiguration, IKeyStoreConfiguration keyManagerKeyStoreConfiguration)
+    public ISecurityManagerProvider getSecurityManagerProvider(IKeyStoreConfiguration trustKeyStoreConfiguration, IKeyStoreConfiguration keyStoreConfiguration)
             throws GeneralSecurityException, IOException {
         KeyStore trustKeyStore = null; // default -> JAVA_HOME/jre/lib/security/cacerts
         if (trustKeyStoreConfiguration != null) {
@@ -157,11 +219,11 @@ public final class SecurityManagerProviderFactory {
                                                                     trustKeyStoreConfiguration.getKeyStorePassword());  
         }
             
-        KeyStore keyManagerKeyStore = KeyStoreUtil.getInstance().readKeyStore(keyManagerKeyStoreConfiguration.getKeyStoreFile().getPath(),
-                                                                              keyManagerKeyStoreConfiguration.getKeyStoreType(),
-                                                                              keyManagerKeyStoreConfiguration.getKeyStoreProvider(),
-                                                                              keyManagerKeyStoreConfiguration.getKeyStorePassword());
+        KeyStore keyStore = KeyStoreUtil.getInstance().readKeyStore(keyStoreConfiguration.getKeyStoreFile().getPath(),
+                                                                    keyStoreConfiguration.getKeyStoreType(),
+                                                                    keyStoreConfiguration.getKeyStoreProvider(),
+                                                                    keyStoreConfiguration.getKeyStorePassword());
 
-        return new SecurityManagerProviderImpl(trustKeyStore, keyManagerKeyStore, keyManagerKeyStoreConfiguration.getKeyStorePassword());
+        return new SecurityManagerProviderImpl(trustKeyStore, keyStore, keyStoreConfiguration.getKeyStorePassword());
     }
 }

@@ -566,7 +566,7 @@ public final class PKIUtil {
      * public key. Any other certificate of the chain is verified by means of the public key derived from the issuing certificate which is located
      * one index higher in the chain.
      * certs[0] = user certificate.
-     * certs[x] = self signed CA certificate
+     * certs[x] = self-signed CA certificate
      *
      * @param consumer the consumer
      * @param certs the certificate chain to verify
@@ -583,7 +583,7 @@ public final class PKIUtil {
      *
      * @param consumer the consumer
      * @param userCert the certificate to verify
-     * @param caCert the certificate of the CA which has issued the userCert or <code>null</code> if the userCert is a self signed certificate
+     * @param caCert the certificate of the CA which has issued the userCert or <code>null</code> if the userCert is a self-signed certificate
      * @throws GeneralSecurityException in case of error
      */
     @Deprecated

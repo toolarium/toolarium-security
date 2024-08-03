@@ -47,7 +47,7 @@ public class SSLContextFactoryTest {
      */
     //@Test()
     public void manualTest() throws GeneralSecurityException, IOException {
-        // create self signed certificate
+        // create self-signed certificate
         ISecurityManagerProvider securityManagerProvider = SecurityManagerProviderFactory.getInstance().getSecurityManagerProvider("toolarium", "changit");
         assertNotNull(securityManagerProvider);
         
@@ -81,7 +81,7 @@ public class SSLContextFactoryTest {
      */
     @Test
     public void httpClientTestAcceptAllCertificates() throws GeneralSecurityException, IOException, InterruptedException {
-        // create self signed certificate
+        // create self-signed certificate
         ISecurityManagerProvider securityManagerProvider = SecurityManagerProviderFactory.getInstance().getSecurityManagerProvider("toolarium", "changit");
         assertNotNull(securityManagerProvider);
         final int testPort = 8081;
@@ -97,7 +97,7 @@ public class SSLContextFactoryTest {
 
     
     /**
-     * Test and accept self signed certificate
+     * Test and accept self-signed certificate
      *
      * @throws IOException in case of a file read error
      * @throws GeneralSecurityException in case of error
@@ -105,7 +105,7 @@ public class SSLContextFactoryTest {
      */
     @Test
     public void httpClientTestAcceptSelfSignedCertificate() throws GeneralSecurityException, IOException, InterruptedException {
-        // create self signed certificate
+        // create self-signed certificate
         ISecurityManagerProvider securityManagerProvider = SecurityManagerProviderFactory.getInstance().getSecurityManagerProvider("toolarium", "changit");
         assertNotNull(securityManagerProvider);
         final int testPort = 8082;
@@ -123,7 +123,7 @@ public class SSLContextFactoryTest {
 
     
     /**
-     * Test and accept self signed certificate
+     * Test and accept self-signed certificate
      *
      * @throws IOException in case of a file read error
      * @throws GeneralSecurityException in case of error
@@ -131,7 +131,7 @@ public class SSLContextFactoryTest {
      */
     @Test
     public void httpClientTest() throws GeneralSecurityException, IOException, InterruptedException {
-        // create self signed certificate
+        // create self-signed certificate
         ISecurityManagerProvider securityManagerProvider = SecurityManagerProviderFactory.getInstance().getSecurityManagerProvider("toolarium", "changit");
         assertNotNull(securityManagerProvider);
         final int testPort = 8083;

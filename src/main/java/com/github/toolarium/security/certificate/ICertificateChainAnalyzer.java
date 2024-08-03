@@ -53,7 +53,7 @@ public interface ICertificateChainAnalyzer {
     
     
     /**
-     * Determines if a certificate is a self signed certificate
+     * Determines if a certificate is a self-signed certificate
      *
      * @param certificate the certificate to test
      * @return true if the certificate is self-signed, otherwise false if the certificate was not self-signed or the certificate signature could not be verified

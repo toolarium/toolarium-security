@@ -51,7 +51,7 @@ public final class CertificateTestUtil {
 
     
     /**
-     * Create self signed certificate list:
+     * Create self-signed certificate list:
      * 
      * <pre> 
      *               NOW
@@ -75,7 +75,7 @@ public final class CertificateTestUtil {
 
     
     /**
-     * Create self signed certificate list:
+     * Create self-signed certificate list:
      * 
      * <pre> 
      *               NOW

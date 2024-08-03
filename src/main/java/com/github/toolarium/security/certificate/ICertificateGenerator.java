@@ -33,7 +33,7 @@ public interface ICertificateGenerator {
 
     
     /**
-     * Creates a self signed certificate
+     * Creates a self-signed certificate
      * 
      * @param dn the name
      * @return a new created certificate

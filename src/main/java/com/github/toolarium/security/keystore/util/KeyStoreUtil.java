@@ -503,6 +503,10 @@ public final class KeyStoreUtil {
     public TrustManager[] getTrustAllCertificateManager() {
         TrustManager[] trustAllCerts = new TrustManager[] {
             new X509TrustManager() {
+                    /**
+                     * @see javax.net.ssl.X509TrustManager#getAcceptedIssuers()
+                     */
+                    @Override
                     public java.security.cert.X509Certificate[] getAcceptedIssuers() {
                         return new X509Certificate[0];
                     }
@@ -511,13 +515,16 @@ public final class KeyStoreUtil {
                     /**
                      * @see javax.net.ssl.X509TrustManager#checkClientTrusted(java.security.cert.X509Certificate[], java.lang.String)
                      */
+                    @Override
                     public void checkClientTrusted(java.security.cert.X509Certificate[] certs, String authType) {
                         // NOP
                     }
 
+                    
                     /**
                      * @see javax.net.ssl.X509TrustManager#checkServerTrusted(java.security.cert.X509Certificate[], java.lang.String)
                      */
+                    @Override
                     public void checkServerTrusted(java.security.cert.X509Certificate[] certs, String authType) {
                         // NOP
                     }

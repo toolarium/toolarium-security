@@ -154,7 +154,6 @@ public final class CryptoHashUtil {
      * @param in the input message
      * @return the message digest 
      * @throws GeneralSecurityException in case of error
-     * @throws UnsupportedEncodingException in case of error
      */
     public byte[] createHashWithKey(String provider, byte[] inputKey, byte[] in)  throws GeneralSecurityException {
         if (in == null) {

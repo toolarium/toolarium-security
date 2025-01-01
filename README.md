@@ -107,7 +107,7 @@ assertTrue(ChallengeResponseUtil.getInstance().checkResponse(provider, "RSA", ke
 ### Test security environment
 
 In this library there is a test where you can verify if secure encryption is enabled by the used Java installation and the secure random 
-is properly working (``` SecureRandom.getInstanceStrong()```):
+is properly working (```SecureRandom.getInstanceStrong()```):
 ```
 java -cp build\libs\toolarium-security-1.1.4.jar com.github.toolarium.security.test.JavaSecurityTester
 ```

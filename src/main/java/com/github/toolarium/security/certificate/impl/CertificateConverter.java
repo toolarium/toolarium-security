@@ -5,9 +5,9 @@
  */
 package com.github.toolarium.security.certificate.impl;
 
+import com.github.toolarium.common.util.FileUtil;
 import com.github.toolarium.security.certificate.ICertificateConverter;
 import com.github.toolarium.security.pki.util.PKIUtil;
-import com.github.toolarium.security.util.FileUtil;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;

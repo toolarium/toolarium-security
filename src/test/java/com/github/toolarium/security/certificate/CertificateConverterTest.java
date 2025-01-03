@@ -9,11 +9,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.github.toolarium.common.util.FileUtil;
 import com.github.toolarium.security.certificate.impl.CertificateConverter;
 import com.github.toolarium.security.certificate.util.CertificateTestUtil;
 import com.github.toolarium.security.certificate.util.PKIUtilTest;
 import com.github.toolarium.security.pki.util.PKIUtil;
-import com.github.toolarium.security.util.FileUtil;
 import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
@@ -26,7 +26,7 @@ import org.slf4j.LoggerFactory;
 
 
 /**
- * 
+ * CertificateConverterTest 
  * @author patrick
  */
 public class CertificateConverterTest {

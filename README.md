@@ -1,5 +1,5 @@
 [![License](https://img.shields.io/github/license/toolarium/toolarium-security)](https://github.com/toolarium/toolarium-security/blob/master/LICENSE)
-[![Maven Central](https://img.shields.io/maven-central/v/com.github.toolarium/toolarium-security/1.1.4)](https://search.maven.org/artifact/com.github.toolarium/toolarium-security/1.1.4/jar)
+[![Maven Central](https://img.shields.io/maven-central/v/com.github.toolarium/toolarium-security/1.1.5)](https://search.maven.org/artifact/com.github.toolarium/toolarium-security/1.1.5/jar)
 [![javadoc](https://javadoc.io/badge2/com.github.toolarium/toolarium-security/javadoc.svg)](https://javadoc.io/doc/com.github.toolarium/toolarium-security)
 
 # toolarium-security
@@ -21,7 +21,7 @@ We use [SemVer](http://semver.org/) for versioning. For the versions available, 
 
 ```groovy
 dependencies {
-    implementation "com.github.toolarium:toolarium-security:1.1.4"
+    implementation "com.github.toolarium:toolarium-security:1.1.5"
 }
 ```
 
@@ -31,7 +31,7 @@ dependencies {
 <dependency>
     <groupId>com.github.toolarium</groupId>
     <artifactId>toolarium-security</artifactId>
-    <version>1.1.4</version>
+    <version>1.1.5</version>
 </dependency>
 ```
 
@@ -109,7 +109,7 @@ assertTrue(ChallengeResponseUtil.getInstance().checkResponse(provider, "RSA", ke
 In this library there is a test where you can verify if secure encryption is enabled by the used Java installation and the secure random 
 is properly working (```SecureRandom.getInstanceStrong()```):
 ```
-java -cp build\libs\toolarium-security-1.1.4.jar com.github.toolarium.security.test.JavaSecurityTester
+java -cp build\libs\toolarium-security-1.1.5.jar com.github.toolarium.security.test.JavaSecurityTester
 ```
 
 #### Output Windows

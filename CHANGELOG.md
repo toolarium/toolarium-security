@@ -7,10 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [ 1.1.5 ] - 2025-01-03
 ### Added
-- Added class com.github.toolarium.security.test.JavaSecurityTester.
+- Added class com.github.toolarium.security.configuration.PKIConfigurationUtil.
 
 ### Changed
-- Updated library dependencies.
+- Removed FileUtil and use FileUtil from toolarium-common.
 
 ## [ 1.1.4 ] - 2025-01-01
 ### Added

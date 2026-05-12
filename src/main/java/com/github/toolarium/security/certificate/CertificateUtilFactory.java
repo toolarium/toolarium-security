@@ -30,7 +30,7 @@ public final class CertificateUtilFactory {
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final CertificateUtilFactory INSTANCE = new CertificateUtilFactory();
     }
 

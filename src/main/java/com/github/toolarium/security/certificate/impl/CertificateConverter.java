@@ -88,22 +88,21 @@ public class CertificateConverter implements ICertificateConverter {
     public X509Certificate[] combineCertificates(X509Certificate[] certs, X509Certificate[] caCerts) {
         X509Certificate[] combinedCerts = null;
         int len = 0;
-        int offset = 0;
-
         if (certs != null) {
             len += certs.length;
         }
-        
+
         if (caCerts != null) {
             len += caCerts.length;
         }
-        
+
         if (len > 0) {
             combinedCerts = new X509Certificate[len];
         } else {
             return null;
         }
         
+        int offset = 0;
         if (certs != null) {
             for (int i = 0; i < certs.length; i++) {
                 combinedCerts[offset++] = certs[i];

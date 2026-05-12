@@ -41,6 +41,7 @@ import org.slf4j.LoggerFactory;
 public final class KeyStoreUtil {
     private static final String PKCS12 = "PKCS12";
     private static final Logger LOG = LoggerFactory.getLogger(KeyStoreUtil.class);
+    private volatile KeyStore cachedDefaultTrustKeyStore;
 
 
     /**
@@ -48,7 +49,7 @@ public final class KeyStoreUtil {
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final KeyStoreUtil INSTANCE = new KeyStoreUtil();
     }
 
@@ -175,13 +176,14 @@ public final class KeyStoreUtil {
             ks = KeyStore.getInstance(type);
         }
         
-        InputStream in = new BufferedInputStream(new FileInputStream(new File(fileName)));
-        if (password != null && password.getValue() != null) {
-            ks.load(in, password.getValue().toCharArray());
-        } else {
-            ks.load(in, null);
+        try (InputStream in = new BufferedInputStream(new FileInputStream(new File(fileName)))) {
+            if (password != null && password.getValue() != null) {
+                ks.load(in, password.getValue().toCharArray());
+            } else {
+                ks.load(in, null);
+            }
         }
-        
+
         return ks;
     }
 
@@ -271,13 +273,15 @@ public final class KeyStoreUtil {
             try {
                 LOG.info("Read existing keystore [" + fileName + "].");
                 ks = readPKCS12KeyStore(fileName, provider, password);
-            } catch (IOException e) {
-                LOG.error("Invalid keystore: " + fileName);
+            } catch (IOException | GeneralSecurityException e) {
+                LOG.warn("Could not read existing keystore [" + fileName + "]: " + e.getMessage() + ". Creating new keystore.");
             }
         }
 
         if (ks == null) {
-            LOG.debug("Create new keystore [" + fileName + "].");
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Create new keystore [" + fileName + "].");
+            }
             if (provider == null) {
                 ks = KeyStore.getInstance(PKCS12);
             } else {
@@ -307,7 +311,9 @@ public final class KeyStoreUtil {
 
         OutputStream out = null;
         try {
-            LOG.debug("Write keystore [" + fileName + "].");
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Write keystore [" + fileName + "].");
+            }
             out = new BufferedOutputStream(new FileOutputStream(new File(fileName)));
             ks.store(out, pw);
             out.flush();
@@ -339,7 +345,9 @@ public final class KeyStoreUtil {
         }
         
         KeyStore ks = null;
-        LOG.debug("Create new keystore...");
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Create new keystore...");
+        }
         if (provider == null) {
             ks = KeyStore.getInstance(PKCS12);
         } else {
@@ -402,12 +410,17 @@ public final class KeyStoreUtil {
      * @throws IOException In case of an I/O error
      */
     public KeyStore getDefaultTrustKeyStore() throws GeneralSecurityException, IOException {
+        KeyStore result = cachedDefaultTrustKeyStore;
+        if (result != null) {
+            return result;
+        }
+
         final KeyStore trustManagerKeyStore = KeyStoreUtil.getInstance().createKeyStore(null);
         X509TrustManager defaultTm = KeyStoreUtil.getInstance().getDefaultX509TrustManager();
         X509Certificate[] trustedIssuers = defaultTm.getAcceptedIssuers();
         if (trustedIssuers != null) {
             int i = 1;
-            
+
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Init new default trust stire with default trusted issuers: " + trustedIssuers.length);
             }
@@ -422,6 +435,7 @@ public final class KeyStoreUtil {
             }
         }
 
+        cachedDefaultTrustKeyStore = trustManagerKeyStore;
         return trustManagerKeyStore;
     }
 
@@ -496,11 +510,17 @@ public final class KeyStoreUtil {
 
     
     /**
-     * Get a {@link TrustManager} which trust all certificates 
+     * Get a {@link TrustManager} which trust all certificates.
+     *
+     * <p><b>WARNING: This method disables all certificate validation and must only be used for testing purposes.
+     * Using this in production enables man-in-the-middle attacks.</b></p>
      *
      * @return {@link TrustManager} which trust all certificates
+     * @deprecated This method is insecure and should not be used in production. Use proper trust store configuration instead.
      */
+    @Deprecated
     public TrustManager[] getTrustAllCertificateManager() {
+        LOG.warn("Using trust-all certificate manager: this disables TLS certificate validation and is insecure!");
         TrustManager[] trustAllCerts = new TrustManager[] {
             new X509TrustManager() {
                     /**
@@ -511,7 +531,7 @@ public final class KeyStoreUtil {
                         return new X509Certificate[0];
                     }
 
-                    
+
                     /**
                      * @see javax.net.ssl.X509TrustManager#checkClientTrusted(java.security.cert.X509Certificate[], java.lang.String)
                      */
@@ -520,7 +540,7 @@ public final class KeyStoreUtil {
                         // NOP
                     }
 
-                    
+
                     /**
                      * @see javax.net.ssl.X509TrustManager#checkServerTrusted(java.security.cert.X509Certificate[], java.lang.String)
                      */

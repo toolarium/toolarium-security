@@ -28,6 +28,10 @@ public class CertificateFilter implements ICertificateFilter {
      */
     @Override
     public List<X509Certificate> filterValid(List<X509Certificate> certificates) {
+        if (certificates == null || certificates.isEmpty()) {
+            return new LinkedList<X509Certificate>();
+        }
+
         List<X509Certificate> result = new LinkedList<X509Certificate>();
         Date dateToCheck = new Date();
         for (X509Certificate certificate : certificates) {
@@ -51,6 +55,10 @@ public class CertificateFilter implements ICertificateFilter {
      */
     @Override
     public List<X509Certificate> filterExpired(List<X509Certificate> certificates) {
+        if (certificates == null || certificates.isEmpty()) {
+            return new LinkedList<X509Certificate>();
+        }
+
         List<X509Certificate> result = new LinkedList<X509Certificate>();
         Date dateToCheck = new Date();
         for (X509Certificate certificate : certificates) {
@@ -73,6 +81,10 @@ public class CertificateFilter implements ICertificateFilter {
      */
     @Override
     public List<X509Certificate> filterNotYedValid(List<X509Certificate> certificates) {
+        if (certificates == null || certificates.isEmpty()) {
+            return new LinkedList<X509Certificate>();
+        }
+
         List<X509Certificate> result = new LinkedList<X509Certificate>();
         Date dateToCheck = new Date();
         for (X509Certificate certificate : certificates) {

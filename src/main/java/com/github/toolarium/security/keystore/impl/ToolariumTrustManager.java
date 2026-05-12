@@ -13,7 +13,7 @@ import java.security.cert.CertificateException;
 import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateNotYetValidException;
 import java.security.cert.X509Certificate;
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.net.ssl.TrustManager;
 import javax.security.auth.x500.X500Principal;
 import org.bouncycastle.asn1.x500.RDN;
@@ -39,16 +39,16 @@ public class ToolariumTrustManager implements javax.net.ssl.X509TrustManager {
     private static final int CERT_UNKNOWNCA = 5;
     private static final int CERT_INVALIDCOMMONNAME = 6;
     
-    private HashMap<String, X509Certificate> trustedCerts;
-    private int certCheckResult;
-    private boolean verifyCertificate;
+    private final ConcurrentHashMap<String, X509Certificate> trustedCerts;
+    private volatile int certCheckResult;
+    private volatile boolean verifyCertificate;
 
     
     /**
      * Constructor for ToolariumTrustManager
      */
     public ToolariumTrustManager() {
-        trustedCerts = new HashMap<String, X509Certificate>();
+        trustedCerts = new ConcurrentHashMap<String, X509Certificate>();
         certCheckResult = CERT_NOT_CHECKED;
         verifyCertificate = true;
     }
@@ -78,9 +78,8 @@ public class ToolariumTrustManager implements javax.net.ssl.X509TrustManager {
      */
     @Override
     public void checkClientTrusted(X509Certificate[] chain, String protocol) throws CertificateException {
-        if (chain.length == 0) {
-            LOG.warn("The received client certificate was empty!");
-            return;
+        if (chain == null || chain.length == 0) {
+            throw new CertificateException("Client certificate chain is empty!");
         }
 
         verifyCertificateChain(chain, protocol);
@@ -92,9 +91,8 @@ public class ToolariumTrustManager implements javax.net.ssl.X509TrustManager {
      */
     @Override
     public void checkServerTrusted(X509Certificate[] chain, String protocol) throws CertificateException {
-        if (chain.length == 0) {
-            LOG.warn("The received server certificate was empty!");
-            return;
+        if (chain == null || chain.length == 0) {
+            throw new CertificateException("Server certificate chain is empty!");
         }
 
         // check if the server certificate should be added or not
@@ -102,7 +100,7 @@ public class ToolariumTrustManager implements javax.net.ssl.X509TrustManager {
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Server certificate #" + (i + 1) + ": \n" + CertificateUtilFactory.getInstance().getConverter().formatPKCS7(chain[i]));
             }
-            
+
             if (trustServerCertificate(chain[i])) {
                 addTrustedCertificate(chain[i]);
             }
@@ -111,7 +109,7 @@ public class ToolariumTrustManager implements javax.net.ssl.X509TrustManager {
         if (verifyCertificate) {
             verifyCertificateChain(chain, protocol);
         }
-    }    
+    }
 
     
     /**

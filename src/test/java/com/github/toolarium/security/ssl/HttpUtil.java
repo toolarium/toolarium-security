@@ -42,7 +42,7 @@ public final class HttpUtil {
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final HttpUtil INSTANCE = new HttpUtil();
     }
 

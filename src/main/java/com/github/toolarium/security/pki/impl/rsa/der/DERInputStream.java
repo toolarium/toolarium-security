@@ -31,10 +31,17 @@ import java.util.Vector;
  * @author patrick
  */
 public class DERInputStream {
-    
+
+    /** Maximum nesting depth for constructed DER values to prevent stack overflow from malformed input. */
+    private static final int MAX_DER_NESTING_DEPTH = 100;
+
+    /** Maximum allowed DER value length (32 MB) to prevent denial-of-service via huge allocation from untrusted input. */
+    private static final int MAX_DER_LENGTH = 32 * 1024 * 1024;
+
     // This version only supports fully buffered DER.  This is easy to work with, though if large objects are manipulated DER becomes
     // awkward to deal with.  That's where BER is useful, since BER handles streaming data relatively well.
     private DERInputBuffer buffer;
+    private int nestingDepth;
 
     
     /**
@@ -67,8 +74,19 @@ public class DERInputStream {
      * @param buf the buffer
      */
     public DERInputStream(DERInputBuffer buf) {
+        this(buf, 0);
+    }
+
+    /**
+     * Constructor for DERInputStream with depth tracking
+     *
+     * @param buf the buffer
+     * @param depth the current nesting depth
+     */
+    DERInputStream(DERInputBuffer buf, int depth) {
         buffer = buf;
         buffer.mark(Integer.MAX_VALUE);
+        this.nestingDepth = depth;
     }
 
     
@@ -316,19 +334,24 @@ public class DERInputStream {
      * @throws IOException In case of a data error
      */
     protected DERValue[] readVector(int startLen) throws IOException {
+        if (nestingDepth >= MAX_DER_NESTING_DEPTH) {
+            throw new IOException("DER encoding too deeply nested (exceeded " + MAX_DER_NESTING_DEPTH + " levels)");
+        }
+
         int len = getLength(buffer);
         DERInputStream newstr;
 
         if (len == 0) { // return empty array instead of null, which should be used only for missing optionals
             return new DERValue[0];
         }
-        
+
         // Create a temporary stream from which to read the data, unless it's not really needed.
         if (buffer.available() == len) {
             newstr = this;
         } else {
             newstr = subStream(len, true);
         }
+        newstr.nestingDepth = this.nestingDepth + 1;
         
         // Pull values out of the stream.
         Vector<DERValue> vec = new Vector<DERValue>(startLen, 5);
@@ -679,17 +702,18 @@ public class DERInputStream {
      * @param data the data
      * @param offset the offset
      * @param len the length
+     * @throws IllegalArgumentException if indefinite length DER encoding conversion fails
      */
     private void init(byte[] data, int offset, int len) {
         // check for indefinite length encoding
         if (DERIndefLenConverter.isIndefinite(data[offset + 1])) {
+            byte[] inData = new byte[len];
+            System.arraycopy(data, offset, inData, 0, len);
+            DERIndefLenConverter derIn = new DERIndefLenConverter();
             try {
-                byte[] inData = new byte[len];
-                System.arraycopy(data, offset, inData, 0, len);
-                DERIndefLenConverter derIn = new DERIndefLenConverter();
                 buffer = new DERInputBuffer(derIn.convert(inData));
             } catch (IOException ioe) {
-                // NOP
+                throw new IllegalArgumentException("Failed to convert indefinite length DER encoding: " + ioe.getMessage(), ioe);
             }
         } else {
             buffer = new DERInputBuffer(data, offset, len);
@@ -788,6 +812,10 @@ public class DERInputStream {
             for (value = 0; tmp > 0; tmp--) {
                 value <<= 8;
                 value += 0x0ff & in.read();
+            }
+
+            if (value < 0 || value > MAX_DER_LENGTH) {
+                throw new IOException("DERInputStream.getLength(): invalid or excessive length: " + value);
             }
         }
         return value;

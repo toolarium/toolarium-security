@@ -69,7 +69,7 @@ public class DERInputBuffer extends ByteArrayInputStream implements Cloneable {
         int len = available();
 
         if (len <= 0) {
-            return null;
+            return new byte[0];
         }
         
         byte[] retval = new byte[len];

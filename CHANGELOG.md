@@ -5,7 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [ 1.1.6 ] - 2025-01-03
+## [ 1.1.6 ] - 2026-05-11
+### Changed
+- Updated dependencies: toolarium-common 1.0.0, BouncyCastle 1.80.
+- SSLContextFactory uses TLSv1.2 instead of generic TLS to prevent TLS 1.0/1.1 negotiation.
+- SSLServerSocket restricted to TLSv1.2/TLSv1.3 protocols only.
+- CertificateGenerator uses SecureRandom for certificate serial numbers instead of System.currentTimeMillis().
+- CertificateGenerator sets BasicConstraints CA=true only for root certificates, end-entity certificates get CA=false.
+- CertificateGenerator assigns appropriate KeyUsage per certificate type (CA vs end-entity).
+- CertificateGenerator SAN extension merges user-provided DN and localhost into a single extension.
+- CertificateGenerator EC signature algorithm corrected to SHA256withECDSA.
+- CertificateGenerator main method now takes password and other parameters as arguments.
+- CryptoHashUtil.createHashWithKey() replaced custom HMAC with javax.crypto.Mac (HmacSHA256).
+- SecurityManagerProviderFactory methods now throw GeneralSecurityException instead of returning null.
+- SecurityManagerProviderFactory trust keystore uses getPath() instead of getName() for consistent file resolution.
+- CertificateVerifier verifies self-signed root certificates with their own public key.
+- CertificateVerifier exception wrapping now preserves the original cause.
+- KeyConverterFactory throws IllegalArgumentException for unsupported key algorithms instead of silent RSA fallback.
+- ToolariumTrustManager uses ConcurrentHashMap and volatile fields for thread safety.
+- ToolariumTrustManager rejects empty/null certificate chains with CertificateException.
+- ToolariumKeyManager logs private key info at DEBUG level instead of INFO.
+- Sensitive data (challenge nonces, signatures) no longer logged; only metadata (length/size).
+- Javadoc algorithm examples updated from SHA1withRSA to SHA256withRSA/SHA256withECDSA.
+- CertificateStore file permissions use POSIX owner-only on Unix, best-effort on Windows.
+- DER parser: added recursion depth limits, bounds checks, and max length validation (32 MB).
+- DER parser: replaced InputStream.available() with full stream read for indefinite-length encoding.
+- DER parser: DERInputBuffer.toByteArray() returns empty array instead of null.
+- DER parser: DERInputStream.init() propagates errors instead of swallowing silently.
+- Cached SecureRandom and BouncyCastleProvider instances for performance.
+- Cached default trust keystore to avoid rebuilding on every call.
+- CryptUtil.isStrongEncryptionEnabled() no longer permanently caches transient failures.
+- CryptUtil.createSecretKeySpec() zeroes key material after use.
+- RSAPrivateKeyPKCS8 uses defensive copying in constructor and getEncoded().
+- Resource leaks fixed: try-with-resources in KeyStoreUtil, CertificateStore, SSLUtil.
+- HashId.encode() padding loop guards against infinite recursion.
+- CertificateFilter null-safe for all filter methods.
+- KeyStoreUtil.writePKCS12KeyStore() logs warning instead of silently overwriting corrupted keystores.
+- All LOG.debug() calls guarded with LOG.isDebugEnabled() where string concatenation is involved.
+- JsonSignatureUtil validation logic fixed (AND to OR) and verify uses quoted key matching.
+
+### Added
+- CertificateVerifier: opt-in certificate revocation checking (CRL/OCSP) via setRevocationEnabled().
+
+### Deprecated
+- CryptoHashUtil.md5(): MD5 is cryptographically broken, use sha256() or sha512().
+- CryptoHashUtil.sha1(): SHA-1 is cryptographically weak, use sha256() or sha512().
+- KeyStoreUtil.getTrustAllCertificateManager(): insecure, disables all certificate validation.
 
 ## [ 1.1.5 ] - 2025-01-03
 ### Added

@@ -38,7 +38,7 @@ public final class SecurityManagerProviderFactory {
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final SecurityManagerProviderFactory INSTANCE = new SecurityManagerProviderFactory();
     }
     
@@ -65,21 +65,24 @@ public final class SecurityManagerProviderFactory {
      * Get the security manager provider with self-signed certificate and added to the trust store. 
      *
      * @return the security manager provider
+     * @throws GeneralSecurityException in case of error
      */
-    public ISecurityManagerProvider getSecurityManagerProvider() {
-        return getSecurityManagerProvider("toolarium", "changit"); 
+    public ISecurityManagerProvider getSecurityManagerProvider() throws GeneralSecurityException {
+        return getSecurityManagerProvider("toolarium", "changit");
     }
-    
-    
+
+
     /**
-     * Get the security manager provider with self-signed certificate and added to the trust store. 
-     * 
+     * Get the security manager provider with self-signed certificate and added to the trust store.
+     *
      * @param certificateStoreAlias the certificate store alias
      * @param keyStorePassword the key store password
      * @return the security manager provider
+     * @throws GeneralSecurityException in case of error
      */
-    public ISecurityManagerProvider getSecurityManagerProvider(String certificateStoreAlias, String keyStorePassword) {
-        return getSecurityManagerProvider(null, null, certificateStoreAlias, keyStorePassword);
+    public ISecurityManagerProvider getSecurityManagerProvider(String certificateStoreAlias, String keyStorePassword)
+            throws GeneralSecurityException {
+        return getSecurityManagerProvider(null, null, keyStorePassword, certificateStoreAlias);
     }
 
     
@@ -91,8 +94,10 @@ public final class SecurityManagerProviderFactory {
      * @param keyStorePassword the key store password
      * @param certificateStoreAlias the certificate store alias
      * @return the security manager provider
+     * @throws GeneralSecurityException in case of error
      */
-    public ISecurityManagerProvider getSecurityManagerProvider(String keyStoreFile, String provider, String keyStorePassword, String certificateStoreAlias) {
+    public ISecurityManagerProvider getSecurityManagerProvider(String keyStoreFile, String provider, String keyStorePassword, String certificateStoreAlias)
+            throws GeneralSecurityException {
         try {
             // create key store
             CertificateStore certificateStore = CertificateUtilFactory.getInstance().getGenerator().createCreateCertificate(certificateStoreAlias);
@@ -103,9 +108,8 @@ public final class SecurityManagerProviderFactory {
             }
 
             return getSecurityManagerProvider(keyStore, keyStorePassword, certificateStoreAlias);
-        } catch (IOException | GeneralSecurityException e) {
-            LOG.warn("Could not create certificate: " + e.getMessage(), e);
-            return null;
+        } catch (IOException e) {
+            throw new GeneralSecurityException("Could not create certificate: " + e.getMessage(), e);
         }
     }
 
@@ -119,14 +123,15 @@ public final class SecurityManagerProviderFactory {
      * @param keyStorePassword the key store password
      * @param certificateStoreAlias the certificate store alias
      * @return the security manager provider
+     * @throws GeneralSecurityException in case of error
      */
-    public ISecurityManagerProvider getSecurityManagerProvider(String keyStoreFile, String type, String provider, String keyStorePassword, String certificateStoreAlias) {
+    public ISecurityManagerProvider getSecurityManagerProvider(String keyStoreFile, String type, String provider, String keyStorePassword, String certificateStoreAlias)
+            throws GeneralSecurityException {
         try {
             final KeyStore keyStore = KeyStoreUtil.getInstance().readKeyStore(keyStoreFile, type, provider, new SecuredValue<String>(keyStorePassword));
             return getSecurityManagerProvider(keyStore, keyStorePassword, certificateStoreAlias);
-        } catch (IOException | GeneralSecurityException e) {
-            LOG.warn("Could not create certificate: " + e.getMessage(), e);
-            return null;
+        } catch (IOException e) {
+            throw new GeneralSecurityException("Could not read keystore: " + e.getMessage(), e);
         }
     }
 
@@ -138,18 +143,19 @@ public final class SecurityManagerProviderFactory {
      * @param keyStorePassword the key store password
      * @param certificateStoreAlias the certificate store alias
      * @return the security manager provider
+     * @throws GeneralSecurityException in case of error
      */
-    public ISecurityManagerProvider getSecurityManagerProvider(KeyStore keyStore, String keyStorePassword, String certificateStoreAlias) {
+    public ISecurityManagerProvider getSecurityManagerProvider(KeyStore keyStore, String keyStorePassword, String certificateStoreAlias)
+            throws GeneralSecurityException {
         try {
             // get certificate
             X509Certificate selfSignedCertificate = (X509Certificate)keyStore.getCertificate(certificateStoreAlias);
 
-            // get trust manager and add the self-signed certificate 
+            // get trust manager and add the self-signed certificate
             final KeyStore trustKeyStore = KeyStoreUtil.getInstance().addCertificateToTrustKeystore(certificateStoreAlias, selfSignedCertificate);
             return new SecurityManagerProviderImpl(trustKeyStore, keyStore, new SecuredValue<String>(keyStorePassword, "..."));
-        } catch (IOException | GeneralSecurityException e) {
-            LOG.warn("Could not create certificate: " + e.getMessage(), e);
-            return null;
+        } catch (IOException e) {
+            throw new GeneralSecurityException("Could not create trust keystore: " + e.getMessage(), e);
         }
     }
 
@@ -213,7 +219,7 @@ public final class SecurityManagerProviderFactory {
             throws GeneralSecurityException, IOException {
         KeyStore trustKeyStore = null; // default -> JAVA_HOME/jre/lib/security/cacerts
         if (trustKeyStoreConfiguration != null) {
-            trustKeyStore = KeyStoreUtil.getInstance().readKeyStore(trustKeyStoreConfiguration.getKeyStoreFile().getName(), 
+            trustKeyStore = KeyStoreUtil.getInstance().readKeyStore(trustKeyStoreConfiguration.getKeyStoreFile().getPath(),
                                                                     trustKeyStoreConfiguration.getKeyStoreType(), 
                                                                     trustKeyStoreConfiguration.getKeyStoreProvider(),
                                                                     trustKeyStoreConfiguration.getKeyStorePassword());  

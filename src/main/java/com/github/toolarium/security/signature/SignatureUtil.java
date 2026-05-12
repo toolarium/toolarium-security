@@ -30,7 +30,7 @@ public final class SignatureUtil {
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final SignatureUtil INSTANCE = new SignatureUtil();
     }
     
@@ -56,7 +56,7 @@ public final class SignatureUtil {
     /**
      * Verify a signed data.
      * 
-     * @param algorithm the algorithm like: SHA1withRSA, SHA1withDSA, RSA...
+     * @param algorithm the algorithm like: SHA256withRSA, SHA256withECDSA, RSA...
      * @param publicKey the public key
      * @param dataToVerify the data to verify the signature
      * @param dataToCompareWith the data to compare with the signed data
@@ -72,7 +72,7 @@ public final class SignatureUtil {
      * Verify a signed data.
      * 
      * @param provider the provider
-     * @param algorithm the algorithm like: SHA1withRSA, SHA1withDSA, RSA...
+     * @param algorithm the algorithm like: SHA256withRSA, SHA256withECDSA, RSA...
      * @param publicKey the public key
      * @param dataToVerify the data to verify the signature
      * @param dataToCompareWith the data to compare with the signed data
@@ -150,7 +150,7 @@ public final class SignatureUtil {
     /**
      * Sign data with the given algorithm and private key.
      * 
-     * @param algorithm the algorithm like: SHA1withRSA, SHA1withDSA, RSA...
+     * @param algorithm the algorithm like: SHA256withRSA, SHA256withECDSA, RSA...
      * @param privateKey the private key
      * @param data the data to sign
      * @return the signed response
@@ -165,7 +165,7 @@ public final class SignatureUtil {
      * Sign data with the given algorithm and private key.
      * 
      * @param provider the provider
-     * @param algorithm the algorithm like: SHA1withRSA, SHA1withDSA, RSA...
+     * @param algorithm the algorithm like: SHA256withRSA, SHA256withECDSA, RSA...
      * @param privateKey the private key
      * @param data the data to sign
      * @return the signed response

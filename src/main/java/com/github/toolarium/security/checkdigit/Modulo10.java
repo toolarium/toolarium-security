@@ -17,7 +17,7 @@ public final class Modulo10 extends AbstractModulo<Long> {
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final Modulo10 INSTANCE = new Modulo10();
     }
 

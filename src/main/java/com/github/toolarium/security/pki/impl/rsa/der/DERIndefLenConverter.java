@@ -17,6 +17,7 @@ import java.util.ArrayList;
  * @author patrick
  */
 public class DERIndefLenConverter {
+    private static final int MAX_RECURSION_DEPTH = 100;
     private static final int TAG_MASK = 0x1f; // bits 5-1
     private static final int FORM_MASK = 0x20; // bits 6
     private static final int CLASS_MASK = 0xC0; // bits 8 and 7
@@ -85,7 +86,7 @@ public class DERIndefLenConverter {
         if (dataPos == dataSize) {
             return;
         }
-        if (isEOC(data[dataPos]) && (data[dataPos + 1] == 0)) {
+        if (dataPos + 1 < dataSize && isEOC(data[dataPos]) && (data[dataPos + 1] == 0)) {
             int numOfEncapsulatedLenBytes = 0;
             Object elem = null;
             int idx;
@@ -120,14 +121,28 @@ public class DERIndefLenConverter {
      * Write the tag and if it is an end-of-contents tag then skip the tag and its 1 byte length of zero.
      */
     private void writeTag() {
+        writeTag(0);
+    }
+
+    /**
+     * Write the tag with depth tracking to prevent stack overflow from malformed input.
+     *
+     * @param depth the current recursion depth
+     * @throws IllegalArgumentException if nesting depth exceeds the maximum allowed
+     */
+    private void writeTag(int depth) {
+        if (depth > MAX_RECURSION_DEPTH) {
+            throw new IllegalArgumentException("DER encoding too deeply nested (exceeded " + MAX_RECURSION_DEPTH + " levels)");
+        }
+
         if (dataPos == dataSize) {
             return;
         }
-        
+
         int tag = data[dataPos++];
-        if (isEOC(tag) && (data[dataPos] == 0)) {
+        if (isEOC(tag) && dataPos < dataSize && (data[dataPos] == 0)) {
             dataPos++; // skip length
-            writeTag();
+            writeTag(depth + 1);
         } else {
             newData[newDataPos++] = (byte) tag;
         }

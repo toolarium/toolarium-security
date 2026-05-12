@@ -74,7 +74,9 @@ public class SecurityManagerProviderImpl implements ISecurityManagerProvider {
         try {
             KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
             if (keyStore != null) {
-                LOG.debug("Initialize key manager factory by [" + keyStore + "] of type " + KeyManagerFactory.getDefaultAlgorithm() + "...");
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("Initialize key manager factory by [" + keyStore + "] of type " + KeyManagerFactory.getDefaultAlgorithm() + "...");
+                }
                 if (storePassword != null) {
                     keyManagerFactory.init(keyStore, storePassword.getValue().toCharArray());
                 } else {
@@ -98,7 +100,9 @@ public class SecurityManagerProviderImpl implements ISecurityManagerProvider {
      */
     protected TrustManager[] createTrustManagers(final KeyStore keyStore) throws GeneralSecurityException {
         try {
-            LOG.debug("Initialize trust manager factory by [" + keyStore + "] of type " + KeyManagerFactory.getDefaultAlgorithm() + "...");
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Initialize trust manager factory by [" + keyStore + "] of type " + KeyManagerFactory.getDefaultAlgorithm() + "...");
+            }
             TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
             trustManagerFactory.init(keyStore);
             

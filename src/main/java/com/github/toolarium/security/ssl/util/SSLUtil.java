@@ -34,7 +34,7 @@ public final class SSLUtil {
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final SSLUtil INSTANCE = new SSLUtil();
     }
 
@@ -88,15 +88,22 @@ public final class SSLUtil {
         //assertNotNull(sf);
         SSLServerSocketFactory ssf = sslContext.getServerSocketFactory();
         SSLServerSocket s = (SSLServerSocket) ssf.createServerSocket(port);
-        
-        if (propagateHotName) {
-            String hostName = InetAddress.getLocalHost().getHostName();
-            SSLParameters sslParameters = s.getSSLParameters();
-            sslParameters.setServerNames(Collections.singletonList(new SNIHostName(hostName)));
-            s.setSSLParameters(sslParameters);
-        }
+        try {
+            if (propagateHotName) {
+                String hostName = InetAddress.getLocalHost().getHostName();
+                SSLParameters sslParameters = s.getSSLParameters();
+                sslParameters.setServerNames(Collections.singletonList(new SNIHostName(hostName)));
+                s.setSSLParameters(sslParameters);
+            }
 
-        processServerSocketInfo(consumer, s);
+            // restrict to secure protocols and cipher suites
+            s.setEnabledProtocols(new String[] {"TLSv1.2", "TLSv1.3"});
+
+            processServerSocketInfo(consumer, s);
+        } catch (Exception ex) {
+            s.close();
+            throw ex;
+        }
         return s;
     }
     

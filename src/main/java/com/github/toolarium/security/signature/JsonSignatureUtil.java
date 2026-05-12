@@ -36,7 +36,7 @@ public final class JsonSignatureUtil {
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final JsonSignatureUtil INSTANCE = new JsonSignatureUtil();
     }
 
@@ -84,7 +84,7 @@ public final class JsonSignatureUtil {
         final String signature = new String(Base64.getEncoder().encode(rawSignature));
         
         if (LOG.isDebugEnabled()) {
-            LOG.debug("Signature: " + signature);
+            LOG.debug("Signature generated (" + signature.length() + " chars)");
         }
         
         StringBuilder result = new StringBuilder()
@@ -171,7 +171,7 @@ public final class JsonSignatureUtil {
         }
 
         final String json = trimStartingNewlines(trimEndingNewlines(inputJson));
-        if (!json.startsWith(OPEN_BRACE) && !json.endsWith(ENDING_BRACE)) {
+        if (!json.startsWith(OPEN_BRACE) || !json.endsWith(ENDING_BRACE)) {
             throw new IllegalArgumentException("Invalid JSON!");
         }
         return json;

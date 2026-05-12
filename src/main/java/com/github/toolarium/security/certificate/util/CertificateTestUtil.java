@@ -27,7 +27,7 @@ public final class CertificateTestUtil {
     /**
      * Private class, the only instance of the singelton which will be created by accessing the holder class.
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final CertificateTestUtil INSTANCE = new CertificateTestUtil();
     }
 

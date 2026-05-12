@@ -25,7 +25,7 @@ public final class KeyConverterFactory {
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final KeyConverterFactory INSTANCE = new KeyConverterFactory();
     }
 
@@ -104,6 +104,7 @@ public final class KeyConverterFactory {
      *
      * @param type the type
      * @return the converter
+     * @throws IllegalArgumentException if the key algorithm is not supported
      */
     public IKeyConverter getConverter(String type) {
         if ("DSA".equals(type)) {
@@ -113,8 +114,8 @@ public final class KeyConverterFactory {
         } else if ("RSA".equals(type)) {
             return new RSAKeyConverter();
         }
-        
-        return new RSAKeyConverter();
+
+        throw new IllegalArgumentException("Unsupported key algorithm: " + type);
     }
     
     

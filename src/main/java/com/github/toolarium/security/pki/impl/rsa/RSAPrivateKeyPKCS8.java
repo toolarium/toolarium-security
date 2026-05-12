@@ -37,7 +37,7 @@ public class RSAPrivateKeyPKCS8 implements RSAPrivateKey {
      * @param encoded the private key as byte array
      */
     public RSAPrivateKeyPKCS8(byte[] encoded) {
-        this.encoded = encoded;
+        this.encoded = encoded.clone();
         this.keyspec = null;
     }
 
@@ -100,7 +100,7 @@ public class RSAPrivateKeyPKCS8 implements RSAPrivateKey {
     @Override
     public byte[] getEncoded() {
         if (encoded != null) {
-            return encoded;
+            return encoded.clone();
         }
 
         try {

@@ -22,6 +22,7 @@ import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.time.Duration;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -90,7 +91,9 @@ public class SSLContextFactoryTest {
         SSLEchoService sslEchoService = startSSLEchoService(securityManagerProvider, testPort);
 
         SSLContext sslContext = SSLContext.getInstance("TLS");
-        sslContext.init(null, KeyStoreUtil.getInstance().getTrustAllCertificateManager(), SecureRandom.getInstanceStrong()); 
+        @SuppressWarnings("deprecation")
+        TrustManager[] trustAllCerts = KeyStoreUtil.getInstance().getTrustAllCertificateManager();
+        sslContext.init(null, trustAllCerts, SecureRandom.getInstanceStrong()); 
 
         runTestAndEndup(sslContext, testPort, sslEchoService);
     }

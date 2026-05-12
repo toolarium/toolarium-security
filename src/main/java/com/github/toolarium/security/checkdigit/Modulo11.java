@@ -17,7 +17,7 @@ public final class Modulo11 extends AbstractModulo<String> {
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final Modulo11 INSTANCE = new Modulo11();
     }
 
@@ -73,7 +73,7 @@ public final class Modulo11 extends AbstractModulo<String> {
         if (digits == null || digits.length == 0) {
             throw new IllegalArgumentException("Invalid numbers!");
         }
-        
+
         long sum = 0;
         int length = digits.length;
 

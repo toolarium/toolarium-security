@@ -80,7 +80,7 @@ public final class PKIUtil {
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final PKIUtil INSTANCE = new PKIUtil();
     }
 

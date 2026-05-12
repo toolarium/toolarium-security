@@ -14,12 +14,16 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Serializable;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
+import java.nio.file.attribute.PosixFilePermission;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.cert.X509Certificate;
+import java.util.EnumSet;
 
 
 /**
@@ -169,7 +173,9 @@ public class CertificateStore implements Serializable {
 
     
     /**
-     * Write the private key file
+     * Write the private key file.
+     *
+     * <p><b>WARNING: The private key is written unencrypted. Protect the output file appropriately.</b></p>
      *
      * @param fileName the filename
      * @return the written private key
@@ -192,12 +198,21 @@ public class CertificateStore implements Serializable {
      */
     private void write(String inputFileName, String content) throws IOException { // CHECKSTYLE IGNORE THIS LINE
         String fileName = inputFileName;
-        FileWriter writer = new FileWriter(new File(fileName));
-        writer.append(content);
-        writer.flush();
-        writer.close();
-        
-        new File(fileName).setReadable(false, true);
+        try (FileWriter writer = new FileWriter(new File(fileName))) {
+            writer.append(content);
+            writer.flush();
+        }
+
+        // restrict file permissions to owner-only where supported
+        File file = new File(fileName);
+        if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
+            Files.setPosixFilePermissions(file.toPath(), EnumSet.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
+        } else {
+            file.setReadable(false, false);
+            file.setReadable(true, true);
+            file.setWritable(false, false);
+            file.setWritable(true, true);
+        }
     }
     
     

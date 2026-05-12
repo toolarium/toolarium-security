@@ -8,6 +8,8 @@ package com.github.toolarium.security.hash;
 import com.github.toolarium.security.util.CryptUtil;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,7 +28,7 @@ public final class CryptoHashUtil {
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final CryptoHashUtil INSTANCE = new CryptoHashUtil();
     }
 
@@ -51,23 +53,27 @@ public final class CryptoHashUtil {
     
     /**
      * Creates an MD5 message digest for the given input.
-     * 
+     *
      * @param in the input
      * @return the md5 message digest for the input
      * @throws GeneralSecurityException in case of error
+     * @deprecated MD5 is cryptographically broken. Use {@link #sha256(byte[])} or {@link #sha512(byte[])} instead.
      */
+    @Deprecated
     public byte[] md5(byte[] in) throws GeneralSecurityException {
         return createHash("MD5", in);
-    }    
-    
-    
+    }
+
+
     /**
      * Creates an SHA1 message digest for the given input.
-     * 
+     *
      * @param in the input
      * @return the SHA1 message digest for the input
      * @throws GeneralSecurityException in case of error
+     * @deprecated SHA-1 is cryptographically weak. Use {@link #sha256(byte[])} or {@link #sha512(byte[])} instead.
      */
+    @Deprecated
     public byte[] sha1(byte[] in) throws GeneralSecurityException {
         return createHash("SHA1", in);
     }
@@ -159,64 +165,28 @@ public final class CryptoHashUtil {
         if (in == null) {
             throw new GeneralSecurityException("Invalid input data!");
         }
-        
+
         if (inputKey == null) {
             throw new GeneralSecurityException("Invalid key!");
         }
-        
-        String algorithm = "SHA-256";
+
+        String macAlgorithm = "HmacSHA256";
         if (LOG.isInfoEnabled()) {
-            LOG.info("Create " + algorithm + " hash (" + in.length + " bytes)...");
+            LOG.info("Create " + macAlgorithm + " hash (" + in.length + " bytes)...");
         }
-        
-        // start by getting an object to generate SHA-256 hashes with.
-        MessageDigest messageDigestSHA256 = null;
 
-        if (provider == null) {
-            messageDigestSHA256 = MessageDigest.getInstance(algorithm);
+        Mac mac;
+        if (provider != null && provider.trim().length() > 0) {
+            mac = Mac.getInstance(macAlgorithm, provider);
         } else {
-            messageDigestSHA256 = MessageDigest.getInstance(algorithm, provider);
-        }
-        
-        // get the bytes of the keyStr
-        byte[] key = inputKey;
-
-        // hash the key if necessary to make it fit in a block (see RFC 2104).
-        if (key.length > 64) {
-            messageDigestSHA256.update(key);
-            key = messageDigestSHA256.digest();
-            messageDigestSHA256.reset();
+            mac = Mac.getInstance(macAlgorithm);
         }
 
-        // pad the key bytes to a block (see RFC 2104).
-        byte[] block = new byte[64];
-        for (int i = 0; i < key.length; ++i) {
-            block[i] = key[i];
-        }
+        SecretKeySpec keySpec = new SecretKeySpec(inputKey, macAlgorithm);
+        mac.init(keySpec);
+        byte[] hash = mac.doFinal(in);
 
-        for (int i = key.length; i < block.length; ++i) {
-            block[i] = 0;
-        }
-
-        // calculate the inner hash, defined in RFC 2104 as SHA-256(KEY ^ IPAD + MESSAGE)), where IPAD is 64 bytes of 0x36.
-        for (int i = 0; i < 64; ++i) {
-            block[i] ^= 0x36;
-        }
-
-        messageDigestSHA256.update(block);
-        messageDigestSHA256.update(in);
-        final byte[] hash1 = messageDigestSHA256.digest();
-        messageDigestSHA256.reset();
-
-        // calculate the outer hash, defined in RFC 2104 as SHA-256(KEY ^ OPAD + INNER_HASH), where OPAD is 64 bytes of 0x5c.
-        for (int i = 0; i < 64; ++i) {
-            block[i] ^= (0x36 ^ 0x5c);
-        }
-        messageDigestSHA256.update(block);
-        messageDigestSHA256.update(hash1);
-        byte[] hash = messageDigestSHA256.digest();
-
-        // return a hexadecimal string representation of the message signature. the outer hash is the message signature, convert its bytes to hexadecimals.
+        // return a hexadecimal string representation of the HMAC
         byte[] hexadecimals = new byte[hash.length * 2];
         for (int i = 0; i < hash.length; ++i) {
             for (int j = 0; j < 2; ++j) {

@@ -46,7 +46,9 @@ public class ToolariumKeyManager implements javax.net.ssl.X509KeyManager {
         }
         
         PrivateKey key = x509KeyManager.getPrivateKey(alias);
-        PKIUtil.getInstance().processPrivateKeyInfo(LOG::info, alias, key);
+        if (LOG.isDebugEnabled()) {
+            PKIUtil.getInstance().processPrivateKeyInfo(LOG::debug, alias, key);
+        }
         return key;
     }
     

@@ -262,7 +262,8 @@ public final class HashId {
             }
         }
 
-        while (ret.length() < inputMinHashLength) {
+        int maxPaddingIterations = inputMinHashLength + 10;
+        while (ret.length() < inputMinHashLength && maxPaddingIterations-- > 0) {
             long[] padArray = new long[] {alphabet.charAt(1), alphabet.charAt(0) };
             String padLeft = encode(padArray, alphabet, inputSalt, 0);
             String padRight = encode(padArray, alphabet, join(padArray, ""), 0);
@@ -272,7 +273,7 @@ public final class HashId {
             if (excess > 0) {
                 ret = ret.substring(excess / 2, excess / 2 + inputMinHashLength);
             }
-            
+
             alphabet = consistentShuffle(alphabet, inputSalt + ret);
         }
 
@@ -292,8 +293,6 @@ public final class HashId {
         String originalHash = hash;
 
         if (hash != null && !hash.isEmpty()) {
-            String a = "";
-            char lotteryChar = 0;
 
             for (char guard : guards) {
                 hash = hash.replaceAll(String.valueOf(guard), " ");
@@ -310,6 +309,8 @@ public final class HashId {
                 hash = hash.replaceAll(String.valueOf(sep), " ");
             }
             
+            String a = "";
+            char lotteryChar = 0;
             String[] hashArray = StringUtil.getInstance().splitAsArray(hash, " ");
             for (int i = 0; i < hashArray.length; i++) {
                 String subHash = hashArray[i];

@@ -14,6 +14,7 @@ import java.math.BigInteger;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.PrivateKey;
+import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -52,6 +53,9 @@ import org.slf4j.LoggerFactory;
 public class CertificateGenerator implements ICertificateGenerator {
     private static final long ONE_DAY = 1000L * 60 * 60 * 24;
     private static final Logger LOG = LoggerFactory.getLogger(CertificateGenerator.class);
+    private static final BouncyCastleProvider BC_PROVIDER = new BouncyCastleProvider();
+    private static final SecureRandom SERIAL_RANDOM = new SecureRandom();
+    private static final int SERIAL_NUMBER_BITS = 128;
 
     
     /**
@@ -115,7 +119,7 @@ public class CertificateGenerator implements ICertificateGenerator {
                 maxDate = dateToLocalDateTime(new Date(startDate.getTime() + (ONE_DAY * (validityDays - 1))));
             }
             
-            final BigInteger serial = BigInteger.valueOf(System.currentTimeMillis());
+            final BigInteger serial = new BigInteger(SERIAL_NUMBER_BITS, SERIAL_RANDOM).abs();
             //final X500Name name = new X500Name("CN=" + dn); // "CN=name, O=company, L=location, ST=state, C=country";
             final X500Name name = new X500NameBuilder(BCStyle.INSTANCE)
                         .addRDN(BCStyle.CN, dn)//.addRDN(BCStyle.O, company).addRDN(BCStyle.L, location).addRDN(BCStyle.ST, state).addRDN(BCStyle.C, country)
@@ -139,21 +143,32 @@ public class CertificateGenerator implements ICertificateGenerator {
             final SubjectPublicKeyInfo publicKeyInfo = SubjectPublicKeyInfo.getInstance(ASN1Sequence.getInstance(keyPair.getPublic().getEncoded()));
             final Date notBeforedate = localDateTimeToDate(dateToLocalDateTime(startDate).with(LocalTime.MIN)); // start of the day
             final Date notAfter = localDateTimeToDate(maxDate.with(LocalTime.MAX)); // end of the day;
+            // build SAN extension: include localhost if dnName is different
+            GeneralName[] sanNames;
+            if ("localhost".equals(dnName)) {
+                sanNames = new GeneralName[] {new GeneralName(GeneralName.dNSName, dnName)};
+            } else {
+                sanNames = new GeneralName[] {new GeneralName(GeneralName.dNSName, dnName), new GeneralName(GeneralName.dNSName, "localhost")};
+            }
             final X509v3CertificateBuilder builder = new X509v3CertificateBuilder(issuer, serial, notBeforedate, notAfter, name, publicKeyInfo)
-                                                            .addExtension(Extension.subjectAlternativeName, false, new GeneralNames(new GeneralName(GeneralName.dNSName, dnName)));
+                                                            .addExtension(Extension.subjectAlternativeName, false, new GeneralNames(sanNames));
             // add extensions
 
-            boolean isCa = true; // ??
-            boolean critical = true; // ?
+            boolean isCa = (parent == null);
             JcaX509ExtensionUtils extUtils = new JcaX509ExtensionUtils();
             AuthorityKeyIdentifier authorityKeyIdentifier = extUtils.createAuthorityKeyIdentifier(keyPair.getPublic());
-            builder.addExtension(Extension.subjectAlternativeName, false, new GeneralNames(new GeneralName(GeneralName.dNSName, "localhost")));
             builder.addExtension(Extension.subjectKeyIdentifier, false, extUtils.createSubjectKeyIdentifier(keyPair.getPublic()));
             builder.addExtension(Extension.authorityKeyIdentifier, false, authorityKeyIdentifier);
             builder.addExtension(Extension.basicConstraints, isCa, new BasicConstraints(isCa));
-            KeyUsage usage = new KeyUsage(KeyUsage.keyCertSign | KeyUsage.digitalSignature | KeyUsage.cRLSign | KeyUsage.nonRepudiation | KeyUsage.keyEncipherment | KeyUsage.keyAgreement);
-            builder.addExtension(Extension.keyUsage, false, usage.getEncoded());
+            KeyUsage usage;
+            if (isCa) {
+                usage = new KeyUsage(KeyUsage.keyCertSign | KeyUsage.digitalSignature | KeyUsage.cRLSign);
+            } else {
+                usage = new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyEncipherment | KeyUsage.keyAgreement);
+            }
+            builder.addExtension(Extension.keyUsage, true, usage.getEncoded());
             ExtendedKeyUsage usageEx = new ExtendedKeyUsage(new KeyPurposeId[] {KeyPurposeId.id_kp_serverAuth, KeyPurposeId.id_kp_clientAuth, KeyPurposeId.id_kp_emailProtection });
+            boolean critical = true;
             builder.addExtension(Extension.extendedKeyUsage, !critical, usageEx.getEncoded());
             
             // build certificate
@@ -162,12 +177,12 @@ public class CertificateGenerator implements ICertificateGenerator {
                 signatureAlgorithm = "SHA256WithRSA";
                 //signatureAlgorithm = "SHA256WithRSAEncryption";
             } else if ("EC".equals(keyPair.getPublic().getAlgorithm())) {
-                signatureAlgorithm = "SHA256withECRSA"; //"SHA256withECDSA"
+                signatureAlgorithm = "SHA256withECDSA";
             }
 
-            ContentSigner signer = new JcaContentSignerBuilder(signatureAlgorithm).setProvider(new BouncyCastleProvider()).build(privateKeySigner);
+            ContentSigner signer = new JcaContentSignerBuilder(signatureAlgorithm).setProvider(BC_PROVIDER).build(privateKeySigner);
             X509CertificateHolder holder = builder.build(signer);
-            X509Certificate cert = new JcaX509CertificateConverter().setProvider(new BouncyCastleProvider()).getCertificate(holder);
+            X509Certificate cert = new JcaX509CertificateConverter().setProvider(BC_PROVIDER).getCertificate(holder);
             
             int size = 1;
             if (parent != null && parent.getCertificates() != null) {
@@ -186,36 +201,70 @@ public class CertificateGenerator implements ICertificateGenerator {
 
             CertificateUtilFactory.getInstance().getVerifier().verifyCertificateChain(LOG::info, chain);
             return new CertificateStore(keyPair, chain);
-        } catch (OperatorCreationException | GeneralSecurityException | IOException ex) {
-            GeneralSecurityException e = new GeneralSecurityException(ex.getMessage());
-            e.setStackTrace(ex.getStackTrace());
-            throw e;
+        } catch (OperatorCreationException | IOException ex) {
+            throw new GeneralSecurityException(ex.getMessage(), ex);
         }
     }
 
     
 
     /**
-     * The test CA can e.g. be created with 
+     * Generate a self-signed certificate and write it to files.
+     *
+     * <p>Usage: CertificateGenerator &lt;password&gt; [alias] [dn] [alternativeDn] [filename] [validityDays]</p>
+     *
+     * <p>The test CA can e.g. be created with
      * echo -e"AT\nUpper Austria\nSteyr\nMy Organization\nNetwork tests\nTest CA certificate\nme@myserver.com\n\n\n"
      * | \ openssl req -new -x509 -outform PEM -newkey rsa:2048 -nodes -keyout
      * /tmp/ca.key -keyform PEM -out /tmp/ca.crt -days 365; echo "test password"
      * | openssl pkcs12 -export -in /tmp/ca.crt -inkey /tmp/ca.key -out ca.p12
      * -name "Test CA" -passout stdin The created certificate can be displayed
-     * with openssl pkcs12 -nodes -info -in test.p12 &gt; /tmp/test.cert &aml;&aml; openssl
-     * x509 -noout -text -in /tmp/test.cert
-     * @param args the arguments
+     * with openssl pkcs12 -nodes -info -in test.p12 &gt; /tmp/test.cert &amp;&amp; openssl
+     * x509 -noout -text -in /tmp/test.cert</p>
+     *
+     * @param args the arguments: password (required), alias, dn, alternativeDn, filename, validityDays
      * @throws Exception in case of error
      */
     public static void main(String[] args) throws Exception {
+        if (args == null || args.length < 1) {
+            LOG.info("Usage: CertificateGenerator <password> [alias] [dn] [alternativeDn] [filename] [validityDays]");
+            return;
+        }
+
+        String dn = "Test CN";
+        if (args.length > 2) {
+            dn = args[2];
+        }
+
+        String alternativeDn = "localhost";
+        if (args.length > 3) {
+            alternativeDn = args[3];
+        }
+
+        int validityDays = 365;
+        if (args.length > 5) {
+            validityDays = Integer.parseInt(args[5]);
+        }
+
         String fileName = "testca";
+        if (args.length > 4) {
+            fileName = args[4];
+        }
+
+        String alias = "alias";
+        if (args.length > 1) {
+            alias = args[1];
+        }
+
+        String password = args[0];
+
         CertificateGenerator g = new CertificateGenerator();
-        CertificateStore certificateStore = g.createCreateCertificate(PKIUtil.getInstance().generateKeyPair(null, "RSA", 2048), 
-                                                                      "Test CN", 
-                                                                      "localhost", 
-                                                                      new Date(), 
-                                                                      365);
-        certificateStore.write(fileName, "alias", "4321");
+        CertificateStore certificateStore = g.createCreateCertificate(PKIUtil.getInstance().generateKeyPair(null, "RSA", 2048),
+                                                                      dn,
+                                                                      alternativeDn,
+                                                                      new Date(),
+                                                                      validityDays);
+        certificateStore.write(fileName, alias, password);
         certificateStore.writeCertificate(fileName);
         certificateStore.writePublicKey(fileName);
         certificateStore.writePrivateKey(fileName);

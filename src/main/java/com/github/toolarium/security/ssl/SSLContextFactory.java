@@ -17,22 +17,23 @@ import javax.net.ssl.SSLContext;
  * @author patrick
  */
 public final class SSLContextFactory {
+    private final SecureRandom secureRandom;
 
     /**
      * Private class, the only instance of the singelton which will be created by accessing the holder class.
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final SSLContextFactory INSTANCE = new SSLContextFactory();
     }
 
-    
+
     /**
      * Constructor
      */
     private SSLContextFactory() {
-        // NOP
+        secureRandom = new SecureRandom();
     }
 
     
@@ -54,8 +55,8 @@ public final class SSLContextFactory {
      * @throws GeneralSecurityException If the security key axxess was not successful
      */
     public SSLContext createSslContext(ISecurityManagerProvider securityManagerProvider) throws GeneralSecurityException {
-        SSLContext sslContext = SSLContext.getInstance("TLS");
-        sslContext.init(securityManagerProvider.getKeyManagers(), securityManagerProvider.getTrustManagers(), SecureRandom.getInstanceStrong());
+        SSLContext sslContext = SSLContext.getInstance("TLSv1.2");
+        sslContext.init(securityManagerProvider.getKeyManagers(), securityManagerProvider.getTrustManagers(), secureRandom);
         return sslContext;
     }
 }

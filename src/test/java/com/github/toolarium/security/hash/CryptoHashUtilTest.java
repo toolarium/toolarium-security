@@ -34,6 +34,7 @@ public class CryptoHashUtilTest {
      * 
      * @throws GeneralSecurityException in case of error
      */
+    @SuppressWarnings("deprecation")
     @Test
     public void testMd5() throws GeneralSecurityException {
         final byte[] digest = CryptoHashUtil.getInstance().md5(TEST_MESSAGE.getBytes());
@@ -49,6 +50,7 @@ public class CryptoHashUtilTest {
      * 
      * @throws GeneralSecurityException in case of error
      */
+    @SuppressWarnings("deprecation")
     @Test
     public void testSHA1() throws GeneralSecurityException {
         final byte[] digest = CryptoHashUtil.getInstance().sha1(TEST_MESSAGE.getBytes());

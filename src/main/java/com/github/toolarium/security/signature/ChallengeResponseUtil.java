@@ -16,9 +16,10 @@ import org.slf4j.LoggerFactory;
 
 
 /**
- * <p>This class implements method which can be used for a challenge/response
+ * This class implements method which can be used for a challenge/response
  * protocol. The challenge is a base64 coded random number which can be created
- * by the method <code>getChallenge</code>.</p>
+ * by the method <code>getChallenge</code>.
+ *
  * <p>The method <code>checkResponse</code> checks a given response which should
  * be signed with a <code>PrivateKey</code>.</p>
  * 
@@ -33,7 +34,7 @@ public final class ChallengeResponseUtil {
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final ChallengeResponseUtil INSTANCE = new ChallengeResponseUtil();
     }
 
@@ -80,7 +81,7 @@ public final class ChallengeResponseUtil {
     /**
      * Checks the response given against the challenge verified with the certificate's public key
      * 
-     * @param algorithm the algorithm like: SHA1withRSA, SHA1withDSA, RSA...
+     * @param algorithm the algorithm like: SHA256withRSA, SHA256withECDSA, RSA...
      * @param publicKey the public key
      * @param challenge the base64 encoded challenge
      * @param response the base64 encoded response
@@ -96,7 +97,7 @@ public final class ChallengeResponseUtil {
      * Checks the response given against the challenge verified with the certificate's public key
      * 
      * @param provider the provider
-     * @param algorithm the algorithm like: SHA1withRSA, SHA1withDSA, RSA...
+     * @param algorithm the algorithm like: SHA256withRSA, SHA256withECDSA, RSA...
      * @param publicKey the public key
      * @param challenge the base64 encoded challenge
      * @param response the base64 encoded response
@@ -109,7 +110,7 @@ public final class ChallengeResponseUtil {
         }
         
         if (LOG.isDebugEnabled()) {
-            LOG.debug("  Challenge: " + new String(challenge));
+            LOG.debug("  Challenge: " + challenge.length + " bytes");
         }
 
         // check parameters
@@ -126,7 +127,7 @@ public final class ChallengeResponseUtil {
     /**
      * Generates a response based on the given challenge and private key using the specified algorithm and provider
      * 
-     * @param algorithm the algorithm like: SHA1withRSA, SHA1withDSA, RSA...
+     * @param algorithm the algorithm like: SHA256withRSA, SHA256withECDSA, RSA...
      * @param challenge the base64 encoded challenge
      * @param privateKey the private key as string
      * @return the signed response
@@ -141,7 +142,7 @@ public final class ChallengeResponseUtil {
      * Generates a response based on the given challenge and private key using the specified algorithm and provider
      * 
      * @param provider the provider
-     * @param algorithm the algorithm like: SHA1withRSA, SHA1withDSA, RSA...
+     * @param algorithm the algorithm like: SHA256withRSA, SHA256withECDSA, RSA...
      * @param privateKey the private key
      * @param challenge the base64 encoded challenge
      * @return the signed response

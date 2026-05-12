@@ -27,7 +27,7 @@ public final class CryptUtil {
     public static final String ALGORITHM_AES = "AES";
     
     private static final Logger LOG = LoggerFactory.getLogger(CryptUtil.class);
-    private static Boolean isStrongEncryptionIsEnabled = null; 
+    private static volatile Boolean isStrongEncryptionIsEnabled = null;
     private static final String STRONG_CRYPTION_HELP = 
             "=================================================================\n"
             + "To have access to strong cryption you have to download the \n"
@@ -42,7 +42,7 @@ public final class CryptUtil {
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final CryptUtil INSTANCE = new CryptUtil();
     }
 
@@ -70,31 +70,37 @@ public final class CryptUtil {
      * 
      * @return true if strong cryption is enabled; otherwise false
      */
-    public synchronized boolean isStrongEncryptionEnabled() {
-        if (isStrongEncryptionIsEnabled == null) {
-            // try to get access to strong encryption part
-            try {
-                final KeyGenerator keyGen = KeyGenerator.getInstance(ALGORITHM_AES);
-                keyGen.init(256);
-                final SecretKey key = keyGen.generateKey();
+    public boolean isStrongEncryptionEnabled() {
+        Boolean result = isStrongEncryptionIsEnabled;
+        if (result == null) {
+            synchronized (CryptUtil.class) {
+                result = isStrongEncryptionIsEnabled;
+                if (result == null) {
+                    // try to get access to strong encryption part
+                    try {
+                        final KeyGenerator keyGen = KeyGenerator.getInstance(ALGORITHM_AES);
+                        keyGen.init(256);
+                        final SecretKey key = keyGen.generateKey();
 
-                final Cipher testCipher = getCipher(ALGORITHM_AES);
-                testCipher.init(Cipher.ENCRYPT_MODE, key);
-                isStrongEncryptionIsEnabled = Boolean.TRUE;
-            } catch (Exception e) {
-                isStrongEncryptionIsEnabled = Boolean.FALSE;
-            }
+                        final Cipher testCipher = getCipher(ALGORITHM_AES);
+                        testCipher.init(Cipher.ENCRYPT_MODE, key);
+                        result = Boolean.TRUE;
+                    } catch (Exception e) {
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("Strong cryption is disabled." + "\n" + STRONG_CRYPTION_HELP);
+                        }
+                        return false; // do not cache failure — allow retry
+                    }
 
-            if (LOG.isDebugEnabled()) {
-                if (isStrongEncryptionIsEnabled.booleanValue()) {
-                    LOG.debug("Strong cryption is enabled.");
-                } else {
-                    LOG.debug("Strong cryption is disabled." + "\n" + STRONG_CRYPTION_HELP);
+                    isStrongEncryptionIsEnabled = result;
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("Strong cryption is enabled.");
+                    }
                 }
             }
         }
-        
-        return isStrongEncryptionIsEnabled.booleanValue();
+
+        return result.booleanValue();
     }
 
     
@@ -181,8 +187,12 @@ public final class CryptUtil {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         digest.update(keyString.getBytes("UTF-8"));
         byte[] key = new byte[16];
-        System.arraycopy(digest.digest(), 0, key, 0, key.length);
-        return createSecretKeySpec(key, "AES");        
+        byte[] hash = digest.digest();
+        System.arraycopy(hash, 0, key, 0, key.length);
+        java.util.Arrays.fill(hash, (byte) 0);
+        SecretKeySpec spec = createSecretKeySpec(key, "AES");
+        java.util.Arrays.fill(key, (byte) 0);
+        return spec;
     }
 
 

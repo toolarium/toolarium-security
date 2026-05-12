@@ -8,6 +8,7 @@ package com.github.toolarium.security.pki.impl.rsa.der;
 import com.github.toolarium.security.pki.impl.rsa.data.BigInt;
 import com.github.toolarium.security.pki.impl.rsa.data.BitArray;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -285,17 +286,20 @@ public class DERValue {
 
         length = DERInputStream.getLength((lenByte & 0xff), in);
         if (length == -1) {
-            // indefinite length encoding found
-            int readLen = in.available();
-            int offset = 2; // for tag and length bytes
-            byte[] indefData = new byte[readLen + offset];
+            // indefinite length encoding found — read all remaining bytes
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            byte[] tmpBuf = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = in.read(tmpBuf)) != -1) {
+                baos.write(tmpBuf, 0, bytesRead);
+            }
+            byte[] remainingBytes = baos.toByteArray();
 
+            int offset = 2; // for tag and length bytes
+            byte[] indefData = new byte[remainingBytes.length + offset];
             indefData[0] = tag;
             indefData[1] = lenByte;
-            DataInputStream dis = new DataInputStream(in);
-
-            dis.readFully(indefData, offset, readLen);
-            dis.close();
+            System.arraycopy(remainingBytes, 0, indefData, offset, remainingBytes.length);
             DERIndefLenConverter derIn = new DERIndefLenConverter();
 
             in = new ByteArrayInputStream(derIn.convert(indefData));

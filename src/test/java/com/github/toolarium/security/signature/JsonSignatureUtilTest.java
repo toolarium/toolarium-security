@@ -5,6 +5,8 @@
  */
 package com.github.toolarium.security.signature;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.github.toolarium.security.pki.KeyConverterFactory;
@@ -77,6 +79,83 @@ public class JsonSignatureUtilTest {
     }
 
     
+    /**
+     * Test that a tampered request body fails verification
+     *
+     * @throws GeneralSecurityException occurs, if the test contains errors.
+     * @throws IOException occurs in case of an IO error
+     */
+    @Test
+    public void testVerifyFailsOnTamperedContent() throws GeneralSecurityException, IOException {
+        Security.addProvider(new BouncyCastleProvider());
+        final KeyPair keyPair = PKIUtil.getInstance().generateKeyPair(BC, RSA, 2048);
+        PrivateKey privateKey = KeyConverterFactory.getInstance().getConverter(RSA).getPrivateKey(
+                KeyConverterFactory.getInstance().getConverter(RSA).formatPrivateKey(keyPair.getPrivate()));
+        PublicKey publicKey = KeyConverterFactory.getInstance().getConverter(RSA).getPublicKey(
+                KeyConverterFactory.getInstance().getConverter(RSA).formatPublicKey(keyPair.getPublic()));
+
+        String signed = JsonSignatureUtil.getInstance().sign(BC, SHA256WITH_RSA, privateKey, TEST_JSON);
+
+        // tamper the request body by replacing a value
+        String tampered = signed.replace("2.0.0", "9.9.9");
+        boolean result = JsonSignatureUtil.getInstance().verify(BC, SHA256WITH_RSA, publicKey, tampered);
+        assertFalse(result);
+    }
+
+
+    /**
+     * Test that null JSON throws IllegalArgumentException
+     */
+    @Test
+    public void testVerifyNullJsonThrows() {
+        assertThrows(IllegalArgumentException.class, () ->
+                JsonSignatureUtil.getInstance().verify(BC, SHA256WITH_RSA, null, null));
+    }
+
+
+    /**
+     * Test that blank JSON throws IllegalArgumentException
+     */
+    @Test
+    public void testVerifyBlankJsonThrows() {
+        assertThrows(IllegalArgumentException.class, () ->
+                JsonSignatureUtil.getInstance().verify(BC, SHA256WITH_RSA, null, "   "));
+    }
+
+
+    /**
+     * Test that JSON without the expected wrapper structure throws IllegalArgumentException
+     */
+    @Test
+    public void testVerifyMissingWrapperThrows() {
+        assertThrows(IllegalArgumentException.class, () ->
+                JsonSignatureUtil.getInstance().verify(BC, SHA256WITH_RSA, null, TEST_JSON));
+    }
+
+
+    /**
+     * Test that a wrong key fails verification
+     *
+     * @throws GeneralSecurityException occurs, if the test contains errors.
+     * @throws IOException occurs in case of an IO error
+     */
+    @Test
+    public void testVerifyFailsWithWrongKey() throws GeneralSecurityException, IOException {
+        Security.addProvider(new BouncyCastleProvider());
+        final KeyPair signerPair = PKIUtil.getInstance().generateKeyPair(BC, RSA, 2048);
+        final KeyPair otherPair  = PKIUtil.getInstance().generateKeyPair(BC, RSA, 2048);
+
+        PrivateKey privateKey = KeyConverterFactory.getInstance().getConverter(RSA).getPrivateKey(
+                KeyConverterFactory.getInstance().getConverter(RSA).formatPrivateKey(signerPair.getPrivate()));
+        PublicKey wrongPublicKey = KeyConverterFactory.getInstance().getConverter(RSA).getPublicKey(
+                KeyConverterFactory.getInstance().getConverter(RSA).formatPublicKey(otherPair.getPublic()));
+
+        String signed = JsonSignatureUtil.getInstance().sign(BC, SHA256WITH_RSA, privateKey, TEST_JSON);
+        boolean result = JsonSignatureUtil.getInstance().verify(BC, SHA256WITH_RSA, wrongPublicKey, signed);
+        assertFalse(result);
+    }
+
+
     /**
      * Sign and validate
      *

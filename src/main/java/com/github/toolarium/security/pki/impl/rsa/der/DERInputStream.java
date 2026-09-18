@@ -706,7 +706,7 @@ public class DERInputStream {
      */
     private void init(byte[] data, int offset, int len) {
         // check for indefinite length encoding
-        if (DERIndefLenConverter.isIndefinite(data[offset + 1])) {
+        if (len >= 2 && DERIndefLenConverter.isIndefinite(data[offset + 1])) {
             byte[] inData = new byte[len];
             System.arraycopy(data, offset, inData, 0, len);
             DERIndefLenConverter derIn = new DERIndefLenConverter();

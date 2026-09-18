@@ -5,7 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [ 1.1.7 ] - 2026-05-12
+## [ 1.1.7 ] - 2026-09-18
+### Changed
+- Updated dependencies: toolarium-common 1.1.0, BouncyCastle 1.86.
+- Migrated all password handling from `ISecuredValue<String>` / `String` to `ISecuredSecretValue` / `char[]` across KeyStoreUtil, SecurityManagerProviderFactory, SecurityManagerProviderImpl, CertificateStore, and CertificateGenerator to avoid plaintext password exposure in heap memory.
+- Replaced deprecated `SecureSecret.toCharArray()` calls with `useChars(Function)` pattern via a private `withSecret()` helper to ensure temporary char arrays are zeroed automatically.
+- CertificateGenerator main method reads keystore password into `char[]` and zeroes it after use.
+- JsonSignatureUtil.verify() rewrote signature extraction to use exact structural matching against constants derived from sign() format, plus base64 validation, preventing JSON signature bypass via key-name injection.
+- SecurityManagerProviderFactory: added `DEFAULT_ALIAS` and `DEFAULT_PASSWORD` constants for the no-arg convenience method defaults; added `WARNING: FOR DEVELOPMENT/TESTING ONLY` Javadoc on the zero-arg overload.
+- CertificateVerifier: revocation check disabled by default — added prominent class-level and constructor-level WARNING Javadoc; `System.setProperty("com.sun.security.enableCRLDP", "true")` is now set lazily inside `verifyRevocation()` only when actually needed (guarded to avoid redundant sets); self-signed root verification site documented that it does not validate against a trust anchor.
+- ToolariumTrustManager: documented that `getHostname()` returns null and hostname verification is skipped by default.
+- SignatureUtil.sign(): added best-effort `PrivateKey.destroy()` call after signing to zero key material; DEBUG log site annotated with warning about key metadata exposure.
+- SSLContextFactory: replaced class-level WARNING comment with usage documentation; added `createSslContext(ISecurityManagerProvider, String...)` overload to allow an explicit cipher suite allow-list, and `applyCipherSuites(SSLEngine, String...)` helper that validates suites against JVM-supported ones.
+- CryptUtil: restored `ALGORITHM_AES` constant (was accidentally commented out).
+- `volatile` added to `CertificateVerifier.revocationEnabled` for correct multi-threaded visibility.
 
 ## [ 1.1.6 ] - 2026-05-11
 ### Changed

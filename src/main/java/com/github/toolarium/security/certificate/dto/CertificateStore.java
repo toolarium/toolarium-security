@@ -5,8 +5,8 @@
  */
 package com.github.toolarium.security.certificate.dto;
 
-import com.github.toolarium.common.security.ISecuredValue;
-import com.github.toolarium.common.security.SecuredValue;
+import com.github.toolarium.common.security.ISecuredSecretValue;
+import com.github.toolarium.common.security.SecuredValueFactory;
 import com.github.toolarium.security.certificate.CertificateUtilFactory;
 import com.github.toolarium.security.keystore.util.KeyStoreUtil;
 import com.github.toolarium.security.pki.KeyConverterFactory;
@@ -46,21 +46,21 @@ public class CertificateStore implements Serializable {
      * @throws GeneralSecurityException In case if a export issue
      * @throws IOException In case of an I/O issue
      */
-    public CertificateStore(String fileName, String alias, String password) throws GeneralSecurityException, IOException {
-        this(fileName, alias, new SecuredValue<>(password, "..."));
+    public CertificateStore(String fileName, String alias, char[] password) throws GeneralSecurityException, IOException {
+        this(fileName, alias, SecuredValueFactory.getInstance().createSecret(password, "..."));
     }
-    
-    
+
+
     /**
      * Constructor for CertificateStore
-     * 
+     *
      * @param fileName the filename to read
      * @param alias the alias
      * @param password the password the password
      * @throws GeneralSecurityException In case if a export issue
      * @throws IOException In case of an I/O issue
      */
-    public CertificateStore(String fileName, String alias, ISecuredValue<String> password) throws GeneralSecurityException, IOException {
+    public CertificateStore(String fileName, String alias, ISecuredSecretValue password) throws GeneralSecurityException, IOException {
         final CertificateStore s = KeyStoreUtil.getInstance().readPKCS12KeyPair(fileName, null, alias, password);
         this.certificates = s.getCertificates();
         this.keypair = s.getKeyPair();
@@ -108,8 +108,22 @@ public class CertificateStore implements Serializable {
      * @throws GeneralSecurityException In case if a export issue
      * @throws IOException In case of an I/O issue
      */
-    public KeyStore toKeyStore(String alias, String password) throws GeneralSecurityException, IOException {
-        return KeyStoreUtil.getInstance().createPKCS12KeyStore(null, alias, keypair.getPrivate(), certificates, new SecuredValue<String>(password, "..."));
+    public KeyStore toKeyStore(String alias, char[] password) throws GeneralSecurityException, IOException {
+        return toKeyStore(alias, SecuredValueFactory.getInstance().createSecret(password, "..."));
+    }
+
+
+    /**
+     * Create a PKCS12 key store
+     *
+     * @param alias the alias
+     * @param password the password
+     * @return the written key store
+     * @throws GeneralSecurityException In case if a export issue
+     * @throws IOException In case of an I/O issue
+     */
+    public KeyStore toKeyStore(String alias, ISecuredSecretValue password) throws GeneralSecurityException, IOException {
+        return KeyStoreUtil.getInstance().createPKCS12KeyStore(null, alias, keypair.getPrivate(), certificates, password);
     }
 
     
@@ -123,11 +137,11 @@ public class CertificateStore implements Serializable {
      * @throws GeneralSecurityException In case if a export issue
      * @throws IOException In case of an I/O issue
      */
-    public KeyStore write(String fileName, String alias, String password) throws GeneralSecurityException, IOException {
-        return KeyStoreUtil.getInstance().writePKCS12KeyStore(prepareFilename(fileName, ".p12"), alias, keypair.getPrivate(), certificates, new SecuredValue<String>(password, "..."));
+    public KeyStore write(String fileName, String alias, char[] password) throws GeneralSecurityException, IOException {
+        return KeyStoreUtil.getInstance().writePKCS12KeyStore(prepareFilename(fileName, ".p12"), alias, keypair.getPrivate(), certificates, SecuredValueFactory.getInstance().createSecret(password, "..."));
     }
 
-    
+
     /**
      * Write the PKCS12 key store
      *
@@ -138,7 +152,7 @@ public class CertificateStore implements Serializable {
      * @throws GeneralSecurityException In case if a export issue
      * @throws IOException In case of an I/O issue
      */
-    public KeyStore write(String fileName, String alias, ISecuredValue<String> password) throws GeneralSecurityException, IOException {
+    public KeyStore write(String fileName, String alias, ISecuredSecretValue password) throws GeneralSecurityException, IOException {
         return KeyStoreUtil.getInstance().writePKCS12KeyStore(prepareFilename(fileName, ".p12"), alias, keypair.getPrivate(), certificates, password);
     }
 

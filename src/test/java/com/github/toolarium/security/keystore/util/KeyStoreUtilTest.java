@@ -8,8 +8,8 @@ package com.github.toolarium.security.keystore.util;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import com.github.toolarium.common.security.ISecuredValue;
-import com.github.toolarium.common.security.SecuredValue;
+import com.github.toolarium.common.security.ISecuredSecretValue;
+import com.github.toolarium.common.security.SecuredValueFactory;
 import com.github.toolarium.security.certificate.CertificateUtilFactory;
 import com.github.toolarium.security.certificate.dto.CertificateStore;
 import com.github.toolarium.security.pki.util.PKIUtil;
@@ -33,15 +33,18 @@ public class KeyStoreUtilTest {
     
     /** Defines the PKCS12 test file */
     public static final String PKCS12_TESTFILE = "testpkcs12.p12";
-    
+
     /** Defines the resource */
     public static final String TEST_RESOURCE_PATH = "src/test/resources";
-    
+
     /** Defines the PKCS12 test password */
-    public static final ISecuredValue<String> PKCS12_KEYSTORE_PASSWORD = new SecuredValue<String>("123456", "...");
-    
+    public static final ISecuredSecretValue PKCS12_KEYSTORE_PASSWORD = SecuredValueFactory.getInstance().createSecret("123456".toCharArray(), "...");
+
     /** Defines the PKCS12 test alias */
-    public static final String PKCS12_ALIAS = "Test";    
+    public static final String PKCS12_ALIAS = "Test";
+
+    /** Defines the PKCS12 test password (plain chars for JDK API calls that require char[]) */
+    private static final String PKCS12_PASSWORD = "123456";
     private static final Logger LOG = LoggerFactory.getLogger(KeyStoreUtilTest.class);
     
     
@@ -77,7 +80,7 @@ public class KeyStoreUtilTest {
     @Test
     public void createNewKeyStoreStoredAsFile() throws Exception {
         String file = "build/keystore.p12";
-        KeyStore ks1 = KeyStoreUtil.getInstance().createKeyStore(file, PKCS12_KEYSTORE_PASSWORD.getValue());
+        KeyStore ks1 = KeyStoreUtil.getInstance().createKeyStore(file, PKCS12_PASSWORD.toCharArray());
         assertNotNull(ks1);
         assertEquals("pkcs12", ks1.getType());
 
@@ -90,7 +93,7 @@ public class KeyStoreUtilTest {
         ks1.setCertificateEntry(PKCS12_ALIAS, certificateStore.getCertificates()[0]);
         
         FileOutputStream fos = new FileOutputStream(file);
-        ks1.store(fos, PKCS12_KEYSTORE_PASSWORD.getValue().toCharArray());
+        ks1.store(fos, PKCS12_PASSWORD.toCharArray());
         fos.close();
 
         KeyStore ks2 = KeyStoreUtil.getInstance().readPKCS12KeyStore(file, PKCS12_KEYSTORE_PASSWORD);
@@ -115,7 +118,7 @@ public class KeyStoreUtilTest {
         assertNotNull(cert);
         PKIUtil.getInstance().processCertificate(LOG::debug, null, cert);
         
-        PrivateKey privKey = (PrivateKey) ks.getKey(PKCS12_ALIAS, PKCS12_KEYSTORE_PASSWORD.getValue().toCharArray());
+        PrivateKey privKey = (PrivateKey) ks.getKey(PKCS12_ALIAS, PKCS12_PASSWORD.toCharArray());
         assertNotNull(privKey);
         PKIUtil.getInstance().processPrivateKeyInfo(LOG::debug, null, privKey);
     }

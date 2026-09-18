@@ -5,7 +5,7 @@
  */
 package com.github.toolarium.security.keystore.impl;
 
-import com.github.toolarium.common.security.ISecuredValue;
+import com.github.toolarium.common.security.ISecuredSecretValue;
 import com.github.toolarium.security.keystore.ISecurityManagerProvider;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
@@ -26,7 +26,7 @@ public class SecurityManagerProviderImpl implements ISecurityManagerProvider {
     private static final Logger LOG = LoggerFactory.getLogger(SecurityManagerProviderImpl.class);
     private final transient KeyStore trustManagerStore;
     private final transient KeyStore keyManagerStore;
-    private final transient ISecuredValue<String> keyManagerStorePassword;
+    private final transient ISecuredSecretValue keyManagerStorePassword;
     
     
     /**
@@ -37,7 +37,7 @@ public class SecurityManagerProviderImpl implements ISecurityManagerProvider {
      * @param keyManagerStorePassword the key manager store password
      * @throws IllegalArgumentException In case of an invalid key manager store or password
      */
-    public SecurityManagerProviderImpl(KeyStore trustManagerStore, KeyStore keyManagerStore, ISecuredValue<String> keyManagerStorePassword) {
+    public SecurityManagerProviderImpl(KeyStore trustManagerStore, KeyStore keyManagerStore, ISecuredSecretValue keyManagerStorePassword) {
         this.trustManagerStore = trustManagerStore;
         this.keyManagerStore = keyManagerStore;
         this.keyManagerStorePassword = keyManagerStorePassword;
@@ -70,18 +70,14 @@ public class SecurityManagerProviderImpl implements ISecurityManagerProvider {
      * @return The key managers in the given key store
      * @throws GeneralSecurityException if the key store could not be loaded
      */
-    protected KeyManager[] createKeyManager(final KeyStore keyStore, final ISecuredValue<String> storePassword) throws GeneralSecurityException {
+    protected KeyManager[] createKeyManager(final KeyStore keyStore, final ISecuredSecretValue storePassword) throws GeneralSecurityException {
         try {
             KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
             if (keyStore != null) {
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("Initialize key manager factory by [" + keyStore + "] of type " + KeyManagerFactory.getDefaultAlgorithm() + "...");
                 }
-                if (storePassword != null) {
-                    keyManagerFactory.init(keyStore, storePassword.getValue().toCharArray());
-                } else {
-                    keyManagerFactory.init(keyStore, null);
-                }
+                withSecret(storePassword, chars -> keyManagerFactory.init(keyStore, chars));
             }
             
             return keyManagerFactory.getKeyManagers();
@@ -91,6 +87,50 @@ public class SecurityManagerProviderImpl implements ISecurityManagerProvider {
     }
 
     
+    @FunctionalInterface
+    private interface SecretAction {
+        /**
+         * Run the action with the given password chars.
+         *
+         * @param pw the password chars, or {@code null} if no secret is set
+         * @throws GeneralSecurityException in case of error
+         */
+        void run(char[] pw) throws GeneralSecurityException;
+    }
+
+
+    /**
+     * Execute a secret action using the chars from the given secret value.
+     * If the secret is null or has no value, the action is invoked with a null char array.
+     *
+     * @param secret the secret value
+     * @param action the action to run
+     * @throws GeneralSecurityException in case of error
+     */
+    private static void withSecret(ISecuredSecretValue secret, SecretAction action) throws GeneralSecurityException {
+        if (secret == null || secret.getValue() == null) {
+            action.run(null);
+        } else {
+            try {
+                secret.getValue().useChars(chars -> {
+                    try {
+                        action.run(chars);
+                    } catch (GeneralSecurityException e) {
+                        throw new RuntimeException(e);
+                    }
+                    return null;
+                });
+            } catch (RuntimeException e) {
+                Throwable c = e.getCause();
+                if (c instanceof GeneralSecurityException) {
+                    throw (GeneralSecurityException) c;
+                }
+                throw e;
+            }
+        }
+    }
+
+
     /**
      * Create a {@link TrustManager} for the given key store.
      * 

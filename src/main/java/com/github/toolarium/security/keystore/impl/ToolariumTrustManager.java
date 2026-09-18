@@ -324,9 +324,16 @@ public class ToolariumTrustManager implements javax.net.ssl.X509TrustManager {
     
     
     /**
-     * Gets the host name 
-     * 
-     * @return the name
+     * Gets the host name used for hostname verification during server certificate checks.
+     *
+     * <p><strong>WARNING:</strong> This default implementation returns {@code null}, which
+     * causes hostname verification to be <em>skipped entirely</em>. Any server certificate
+     * with any CN/SAN will be accepted regardless of the actual server hostname. Subclasses
+     * should override this method and return the expected server hostname to enable hostname
+     * verification. Callers relying on {@code ToolariumTrustManager} directly in production
+     * must be aware that hostname verification is the caller's responsibility.</p>
+     *
+     * @return the expected server hostname, or {@code null} to skip hostname verification
      */
     protected String getHostname() {
         return null;

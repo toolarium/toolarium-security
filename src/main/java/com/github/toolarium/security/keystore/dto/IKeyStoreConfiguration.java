@@ -5,7 +5,7 @@
  */
 package com.github.toolarium.security.keystore.dto;
 
-import com.github.toolarium.common.security.ISecuredValue;
+import com.github.toolarium.common.security.ISecuredSecretValue;
 import java.io.File;
 
 
@@ -53,5 +53,5 @@ public interface IKeyStoreConfiguration {
      *
      * @return the key store password or null
      */
-    ISecuredValue<String> getKeyStorePassword();
+    ISecuredSecretValue getKeyStorePassword();
 }

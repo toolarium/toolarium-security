@@ -23,16 +23,25 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Implements the {@link ICertificateVerifier}
- * 
+ *
+ * <p><strong>WARNING:</strong> Certificate revocation checking (CRL/OCSP) is <em>disabled</em>
+ * by default. A revoked certificate will pass validation unless revocation is explicitly
+ * enabled via {@link #setRevocationEnabled(boolean)}. Enable it in production for any
+ * certificate chain issued by a CA that publishes CRLs or supports OCSP.</p>
+ *
  * @author patrick
  */
 public class CertificateVerifier implements ICertificateVerifier {
     private static final Logger LOG = LoggerFactory.getLogger(CertificateVerifier.class);
-    private boolean revocationEnabled;
+    private volatile boolean revocationEnabled;
 
 
     /**
-     * Constructor for CertificateVerifier
+     * Constructor for CertificateVerifier.
+     *
+     * <p><strong>WARNING:</strong> Revocation checking is disabled by default.
+     * Call {@link #setRevocationEnabled(boolean) setRevocationEnabled(true)} to enable
+     * CRL/OCSP checking in production environments.</p>
      */
     public CertificateVerifier() {
         this.revocationEnabled = false;
@@ -112,7 +121,11 @@ public class CertificateVerifier implements ICertificateVerifier {
                 PKIUtil.getInstance().processPublicKeyInfo(consumer, null, caCert.getPublicKey());
             }
         } else {
-            // self-signed root: verify signature with own public key
+            // self-signed root: verify signature with own public key.
+            // WARNING: this only proves the certificate is self-consistent; it does NOT verify
+            // that the root is present in a trusted anchor store. Any arbitrary self-signed
+            // certificate will pass this check. For full trust-anchor validation, callers must
+            // perform an additional check against a trusted KeyStore.
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Verify self-signed root certificate: '" + userCert.getSubjectX500Principal().getName() + "'");
             }
@@ -181,8 +194,10 @@ public class CertificateVerifier implements ICertificateVerifier {
         PKIXParameters params = new PKIXParameters(Collections.singleton(trustAnchor));
         params.setRevocationEnabled(true);
 
-        // enable OCSP if available
-        System.setProperty("com.sun.security.enableCRLDP", "true");
+        // enable CRL distribution point checking if not already enabled
+        if (!"true".equals(System.getProperty("com.sun.security.enableCRLDP"))) {
+            System.setProperty("com.sun.security.enableCRLDP", "true");
+        }
 
         CertPathValidator validator = CertPathValidator.getInstance("PKIX");
         validator.validate(certPath, params);

@@ -5,7 +5,6 @@
  */
 package com.github.toolarium.security.signature;
 
-import com.github.toolarium.common.util.StringUtil;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.PrivateKey;
@@ -30,7 +29,13 @@ public final class JsonSignatureUtil {
     private static final String NL = "\n";
     private static final String SPACE = " ";
 
-    
+    // Derived from the same constants used in sign() — guaranteed to match the produced format
+    private static final String REQUEST_PREFIX = OPEN_BRACE + NL + SPACE + QUOTATION_MARKS + "request" + QUOTATION_MARKS + COLON + SPACE;
+    private static final String SIGNATURE_INFIX = COME + NL + SPACE + QUOTATION_MARKS + "signature" + QUOTATION_MARKS + COLON + QUOTATION_MARKS;
+    private static final String SIGNATURE_SUFFIX = QUOTATION_MARKS + NL + ENDING_BRACE;
+
+
+
     /**
      * Private class, the only instance of the singelton which will be created by accessing the holder class.
      *
@@ -114,47 +119,40 @@ public final class JsonSignatureUtil {
      * @throws IllegalArgumentException In case of invalid input
      */
     public boolean verify(String provider, String signatureAlgorithm, PublicKey publicKey, String requestToVerify) throws GeneralSecurityException {
-        String json = validateJsonInput(requestToVerify);
-        json = json.substring(1, json.length() - 1); // cut braces
-        json = trimStartingNewlines(trimEndingNewlines(json)); // newlines
-        
-        int idx = json.indexOf("request");
-        if (idx < 0) {
-            throw new IllegalArgumentException("Invalid JSON!");
+        final String json = validateJsonInput(requestToVerify);
+
+        // Verify the exact wrapper structure produced by sign()
+        if (!json.startsWith(REQUEST_PREFIX)) {
+            throw new IllegalArgumentException("Invalid JSON: missing request field");
         }
-        
-        json = json.substring(idx + "request".length());
-        json = StringUtil.getInstance().trimLeft(json, QUOTATION_MARKS.toCharArray()[0]);
-        json = StringUtil.getInstance().trimLeft(json, COLON.toCharArray()[0]);
-        
-        idx = json.lastIndexOf("signature");
-        if (idx < 0) {
-            throw new IllegalArgumentException("Invalid JSON!");
+        if (!json.endsWith(SIGNATURE_SUFFIX)) {
+            throw new IllegalArgumentException("Invalid JSON: missing signature field");
         }
-        
-        String signature = StringUtil.getInstance().trimLeft(json.substring(idx + "signature".length()), QUOTATION_MARKS.toCharArray()[0]);
-        signature = StringUtil.getInstance().trimLeft(signature, QUOTATION_MARKS.toCharArray()[0]);
-        signature = StringUtil.getInstance().trimLeft(signature, COLON.toCharArray()[0]);
-        signature = StringUtil.getInstance().trimLeft(signature, QUOTATION_MARKS.toCharArray()[0]);
-        signature = StringUtil.getInstance().trimRight(signature, QUOTATION_MARKS.toCharArray()[0]);
+
+        // lastIndexOf is safe here: the signature value is base64 (A-Za-z0-9+/=) which cannot
+        // contain the SIGNATURE_INFIX characters, so SIGNATURE_INFIX cannot appear after the real field
+        final int sigInfixIdx = json.lastIndexOf(SIGNATURE_INFIX);
+        if (sigInfixIdx < REQUEST_PREFIX.length()) {
+            throw new IllegalArgumentException("Invalid JSON: missing signature field");
+        }
+
+        // Extract the original request content (what was signed) and the signature value
+        final String requestContent = json.substring(REQUEST_PREFIX.length(), sigInfixIdx);
+        final String signature = json.substring(sigInfixIdx + SIGNATURE_INFIX.length(), json.length() - SIGNATURE_SUFFIX.length());
+
+        // Reject any content injected after the signature value (must be pure base64)
+        if (!signature.matches("[A-Za-z0-9+/=]+")) {
+            throw new IllegalArgumentException("Invalid JSON: malformed signature encoding");
+        }
+
         if (LOG.isDebugEnabled()) {
-            LOG.debug("Pasred signature [" + signature + "]");
+            LOG.debug("Parsed signature [" + signature + "]");
+            LOG.debug("Parsed request [" + requestContent + "]");
         }
 
-        json = StringUtil.getInstance().trimRight(json.substring(0, idx), QUOTATION_MARKS.toCharArray()[0]);
-        json = trimEndingNewlines(json);
-        json = StringUtil.getInstance().trimRight(json, COME.toCharArray()[0]);
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("Parsed request [" + json + "]");
-        }
-
-        // raw content to sign and test
-        final byte[] rawContent = json.getBytes(StandardCharsets.UTF_8);
-
-        // decode signature and compare
-        final byte[] sigantureToVerify = Base64.getDecoder().decode(signature.getBytes());
-        boolean result = SignatureUtil.getInstance().verify(provider, signatureAlgorithm, publicKey, rawContent, sigantureToVerify);
-        return result;
+        final byte[] rawContent = requestContent.getBytes(StandardCharsets.UTF_8);
+        final byte[] signatureToVerify = Base64.getDecoder().decode(signature.getBytes());
+        return SignatureUtil.getInstance().verify(provider, signatureAlgorithm, publicKey, rawContent, signatureToVerify);
     }
 
     

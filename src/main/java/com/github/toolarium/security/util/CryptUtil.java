@@ -82,7 +82,7 @@ public final class CryptUtil {
                         keyGen.init(256);
                         final SecretKey key = keyGen.generateKey();
 
-                        final Cipher testCipher = getCipher(ALGORITHM_AES);
+                        final Cipher testCipher = getCipher(ALGORITHM_AES + "/ECB/PKCS5Padding");
                         testCipher.init(Cipher.ENCRYPT_MODE, key);
                         result = Boolean.TRUE;
                     } catch (Exception e) {
@@ -125,10 +125,14 @@ public final class CryptUtil {
      * @throws GeneralSecurityException in case of error
      */
     public Cipher getCipher(String provider, String algorithm) throws GeneralSecurityException {
+        if (algorithm != null && !algorithm.contains("/")) {
+            LOG.warn("Cipher algorithm '" + algorithm + "' specified without mode/padding — defaults to ECB which is insecure for block ciphers. Use e.g. 'AES/GCM/NoPadding'.");
+        }
+
         if (LOG.isDebugEnabled()) {
             LOG.debug("Get cipher object (" + getAlgorithmMessage(provider, algorithm) + ")...");
         }
-        
+
         // Get a cipher object for encryption.
         Cipher cipher = null;
         if (provider != null && provider.length() > 0) {

@@ -5,7 +5,7 @@
  */
 package com.github.toolarium.security.keystore.util;
 
-import com.github.toolarium.common.security.ISecuredValue;
+import com.github.toolarium.common.security.ISecuredSecretValue;
 import com.github.toolarium.security.certificate.CertificateUtilFactory;
 import com.github.toolarium.security.certificate.dto.CertificateStore;
 import com.github.toolarium.security.pki.util.PKIUtil;
@@ -80,11 +80,11 @@ public final class KeyStoreUtil {
      * @throws IOException in case of a file read error
      * @throws GeneralSecurityException in case of error
      */
-    public KeyStore createKeyStore(String password) throws GeneralSecurityException, IOException {
+    public KeyStore createKeyStore(char[] password) throws GeneralSecurityException, IOException {
         return createKeyStore(null, password);
     }
 
-    
+
     /**
      * Create a new keystore
      *
@@ -94,29 +94,19 @@ public final class KeyStoreUtil {
      * @throws IOException in case of a file read error
      * @throws GeneralSecurityException in case of error
      */
-    public KeyStore createKeyStore(String fileName, String password) throws GeneralSecurityException, IOException {
+    public KeyStore createKeyStore(String fileName, char[] password) throws GeneralSecurityException, IOException {
         KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType()); // TODO
         char[] pw = null;
-        if (password != null && !password.isBlank()) {
-            pw = password.toCharArray();
+        if (password != null && password.length > 0) {
+            pw = password;
         }
         
         keyStore.load(null, pw);
         
         if (fileName != null && !fileName.isBlank()) {
             // store away the keystore.
-            FileOutputStream fos = null;
-            try {
-                fos = new FileOutputStream(fileName);
+            try (FileOutputStream fos = new FileOutputStream(fileName)) {
                 keyStore.store(fos, pw);
-            } finally {
-                if (fos != null) {
-                    try {
-                        fos.close();
-                    } catch (IOException e) {
-                        // NOP
-                    }
-                }
             }
         }
         
@@ -133,7 +123,7 @@ public final class KeyStoreUtil {
      * @throws IOException in case of a file read error
      * @throws GeneralSecurityException in case of error
      */
-    public KeyStore readPKCS12KeyStore(String fileName, ISecuredValue<String> password) throws GeneralSecurityException, IOException {
+    public KeyStore readPKCS12KeyStore(String fileName, ISecuredSecretValue password) throws GeneralSecurityException, IOException {
         return readKeyStore(fileName, PKCS12, null, password);
     }
 
@@ -148,7 +138,7 @@ public final class KeyStoreUtil {
      * @throws IOException in case of a file read error
      * @throws GeneralSecurityException in case of error
      */
-    public KeyStore readPKCS12KeyStore(String fileName, String provider, ISecuredValue<String> password) throws GeneralSecurityException, IOException {
+    public KeyStore readPKCS12KeyStore(String fileName, String provider, ISecuredSecretValue password) throws GeneralSecurityException, IOException {
         return readKeyStore(fileName, PKCS12, provider, password);
     }
 
@@ -164,7 +154,7 @@ public final class KeyStoreUtil {
      * @throws IOException in case of a file read error
      * @throws GeneralSecurityException in case of error
      */
-    public KeyStore readKeyStore(String fileName, String type, String provider, ISecuredValue<String> password) throws GeneralSecurityException, IOException {
+    public KeyStore readKeyStore(String fileName, String type, String provider, ISecuredSecretValue password) throws GeneralSecurityException, IOException {
         if (fileName == null) {
             return null;
         }
@@ -177,11 +167,7 @@ public final class KeyStoreUtil {
         }
         
         try (InputStream in = new BufferedInputStream(new FileInputStream(new File(fileName)))) {
-            if (password != null && password.getValue() != null) {
-                ks.load(in, password.getValue().toCharArray());
-            } else {
-                ks.load(in, null);
-            }
+            withSecret(password, chars -> ks.load(in, chars));
         }
 
         return ks;
@@ -199,7 +185,7 @@ public final class KeyStoreUtil {
      * @throws GeneralSecurityException in case of error
      * @throws IOException in case of error
      */
-    public CertificateStore readPKCS12KeyPair(String fileName, String provider, String alias, ISecuredValue<String> password) throws GeneralSecurityException, IOException {
+    public CertificateStore readPKCS12KeyPair(String fileName, String provider, String alias, ISecuredSecretValue password) throws GeneralSecurityException, IOException {
         if (fileName == null) {
             return null;
         }
@@ -218,12 +204,9 @@ public final class KeyStoreUtil {
             throw new GeneralSecurityException("Could not read the certificate from keystore: " + fileName);
         }
 
-        final PrivateKey privKey;
-        if (password != null && password.getValue() != null) {
-            privKey = (PrivateKey) ks.getKey(alias, password.getValue().toCharArray());
-        } else {
-            privKey = (PrivateKey) ks.getKey(alias, null);
-        }
+        final PrivateKey[] privKeyHolder = {null};
+        withSecret(password, chars -> privKeyHolder[0] = (PrivateKey) ks.getKey(alias, chars));
+        final PrivateKey privKey = privKeyHolder[0];
         
         if (privKey == null) {
             throw new GeneralSecurityException("Could not read the private key from keystore: " + fileName);
@@ -245,7 +228,7 @@ public final class KeyStoreUtil {
      * @throws GeneralSecurityException in case of error
      * @throws IOException in case of error
      */
-    public KeyStore writePKCS12KeyStore(String fileName, String alias, PrivateKey privateKey, Certificate[] certificates, ISecuredValue<String> password) throws GeneralSecurityException, IOException {
+    public KeyStore writePKCS12KeyStore(String fileName, String alias, PrivateKey privateKey, Certificate[] certificates, ISecuredSecretValue password) throws GeneralSecurityException, IOException {
         return writePKCS12KeyStore(fileName, null, alias, privateKey, certificates, password);
     }
 
@@ -263,7 +246,7 @@ public final class KeyStoreUtil {
      * @throws GeneralSecurityException in case of error
      * @throws IOException in case of error
      */
-    public KeyStore writePKCS12KeyStore(String fileName, String provider, String alias, PrivateKey privateKey, Certificate[] certificates, ISecuredValue<String> password) throws GeneralSecurityException, IOException {
+    public KeyStore writePKCS12KeyStore(String fileName, String provider, String alias, PrivateKey privateKey, Certificate[] certificates, ISecuredSecretValue password) throws GeneralSecurityException, IOException {
         if (privateKey == null) {
             throw new GeneralSecurityException("Invalid private key!");
         }
@@ -293,36 +276,18 @@ public final class KeyStoreUtil {
             throw new GeneralSecurityException("Could not write keystore: " + fileName);
         }
 
-        char[] pw = null;
-        if (password != null && password.getValue() != null) {
-            pw = password.getValue().toCharArray();
-        }
-
-        // for initializing the keystore
-        if (pw != null) {
-            ks.load(null, pw);
-
-        } else {
-            ks.load(null, null);
-        }
-        
-        ks.setKeyEntry(alias, privateKey, pw, certificates);
-        //ks.setKeyEntry(alias, privateKey.getEncoded(), certificates);
-
-        OutputStream out = null;
-        try {
+        final KeyStore finalKs = ks;
+        withSecret(password, chars -> {
+            finalKs.load(null, chars);
+            finalKs.setKeyEntry(alias, privateKey, chars, certificates);
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Write keystore [" + fileName + "].");
             }
-            out = new BufferedOutputStream(new FileOutputStream(new File(fileName)));
-            ks.store(out, pw);
-            out.flush();
-        } finally {
-            if (out != null) {
-                out.close();
+            try (OutputStream out = new BufferedOutputStream(new FileOutputStream(new File(fileName)))) {
+                finalKs.store(out, chars);
+                out.flush();
             }
-        }
-        
+        });
         return ks;
     }
 
@@ -339,7 +304,7 @@ public final class KeyStoreUtil {
      * @throws GeneralSecurityException in case of error
      * @throws IOException in case of error
      */
-    public KeyStore createPKCS12KeyStore(String provider, String alias, PrivateKey privateKey, Certificate[] certificates, ISecuredValue<String> password) throws GeneralSecurityException, IOException {
+    public KeyStore createPKCS12KeyStore(String provider, String alias, PrivateKey privateKey, Certificate[] certificates, ISecuredSecretValue password) throws GeneralSecurityException, IOException {
         if (privateKey == null) {
             throw new GeneralSecurityException("Invalid private key!");
         }
@@ -354,20 +319,11 @@ public final class KeyStoreUtil {
             ks = KeyStore.getInstance(PKCS12, provider);
         }
 
-        char[] pw = null;
-        if (password != null && password.getValue() != null) {
-            pw = password.getValue().toCharArray();
-        }
-
-        // for initialising the key store
-        if (pw != null) {
-            ks.load(null, pw);
-        } else {
-            ks.load(null, null);
-        }
-        
-        //ks.setKeyEntry(alias, privateKey.getEncoded(), certificates);
-        ks.setKeyEntry(alias, privateKey, pw, certificates);
+        final KeyStore finalKs = ks;
+        withSecret(password, chars -> {
+            finalKs.load(null, chars);
+            finalKs.setKeyEntry(alias, privateKey, chars, certificates);
+        });
         return ks;
     }
 
@@ -509,6 +465,55 @@ public final class KeyStoreUtil {
     }
 
     
+    @FunctionalInterface
+    private interface SecretAction {
+        /**
+         * Run the action with the given password chars.
+         *
+         * @param pw the password chars, or {@code null} if no secret is set
+         * @throws GeneralSecurityException in case of error
+         * @throws IOException in case of an I/O error
+         */
+        void run(char[] pw) throws GeneralSecurityException, IOException;
+    }
+
+
+    /**
+     * Execute a secret action using the chars from the given secret value.
+     * If the secret is null or has no value, the action is invoked with a null char array.
+     *
+     * @param secret the secret value
+     * @param action the action to run
+     * @throws GeneralSecurityException in case of error
+     * @throws IOException in case of an I/O error
+     */
+    private static void withSecret(ISecuredSecretValue secret, SecretAction action) throws GeneralSecurityException, IOException {
+        if (secret == null || secret.getValue() == null) {
+            action.run(null);
+        } else {
+            try {
+                secret.getValue().useChars(chars -> {
+                    try {
+                        action.run(chars);
+                    } catch (GeneralSecurityException | IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                    return null;
+                });
+            } catch (RuntimeException e) {
+                Throwable c = e.getCause();
+                if (c instanceof GeneralSecurityException) {
+                    throw (GeneralSecurityException) c;
+                }
+                if (c instanceof IOException) {
+                    throw (IOException) c;
+                }
+                throw e;
+            }
+        }
+    }
+
+
     /**
      * Get a {@link TrustManager} which trust all certificates.
      *

@@ -5,8 +5,8 @@
  */
 package com.github.toolarium.security.keystore.dto;
 
-import com.github.toolarium.common.security.ISecuredValue;
-import com.github.toolarium.common.security.SecuredValue;
+import com.github.toolarium.common.security.ISecuredSecretValue;
+import com.github.toolarium.common.security.SecuredValueFactory;
 import java.io.File;
 import java.security.KeyStore;
 import java.util.Objects;
@@ -22,7 +22,7 @@ public class KeyStoreConfiguration implements IKeyStoreConfiguration {
     private String provider;
     private String type;
     private String alias;
-    private ISecuredValue<String> password;
+    private ISecuredSecretValue password;
 
     
     /**
@@ -39,7 +39,7 @@ public class KeyStoreConfiguration implements IKeyStoreConfiguration {
      * @param keyStorefile the key store file
      * @param password the password
      */
-    public KeyStoreConfiguration(File keyStorefile, ISecuredValue<String> password) {
+    public KeyStoreConfiguration(File keyStorefile, ISecuredSecretValue password) {
         this(keyStorefile, null, KeyStore.getDefaultType(), null, password);
     }
 
@@ -53,7 +53,7 @@ public class KeyStoreConfiguration implements IKeyStoreConfiguration {
      * @param alias the key store alias
      * @param password the password
      */
-    public KeyStoreConfiguration(File keyStorefile, String provider, String type, String alias, ISecuredValue<String> password) {
+    public KeyStoreConfiguration(File keyStorefile, String provider, String type, String alias, ISecuredSecretValue password) {
         this.keyStorefile = keyStorefile;
         this.provider = provider;
         this.type = type;
@@ -150,7 +150,7 @@ public class KeyStoreConfiguration implements IKeyStoreConfiguration {
      * @see com.github.toolarium.security.keystore.dto.IKeyStoreConfiguration#getKeyStorePassword()
      */
     @Override
-    public ISecuredValue<String> getKeyStorePassword() {
+    public ISecuredSecretValue getKeyStorePassword() {
         return password;
     }
     
@@ -161,8 +161,8 @@ public class KeyStoreConfiguration implements IKeyStoreConfiguration {
      * @param password the key store password
      * @return the key store configuration
      */
-    public KeyStoreConfiguration setKeyStorePassword(String password) {
-        return setKeyStorePassword(new SecuredValue<String>(password, "..."));
+    public KeyStoreConfiguration setKeyStorePassword(char[] password) {
+        return setKeyStorePassword(SecuredValueFactory.getInstance().createSecret(password, "..."));
     }
 
 
@@ -172,7 +172,7 @@ public class KeyStoreConfiguration implements IKeyStoreConfiguration {
      * @param password the key store password
      * @return the key store configuration
      */
-    public KeyStoreConfiguration setKeyStorePassword(ISecuredValue<String> password) {
+    public KeyStoreConfiguration setKeyStorePassword(ISecuredSecretValue password) {
         this.password = password;
         return this;
     }

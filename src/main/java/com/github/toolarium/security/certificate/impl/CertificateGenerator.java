@@ -133,7 +133,7 @@ public class CertificateGenerator implements ICertificateGenerator {
             } else {
                 //PKIUtil.getInstance().logCertificate("Parent certificates:", parent.getCertificates());
                 privateKeySigner = parent.getKeyPair().getPrivate();
-                issuer = new X500Name(parent.getCertificates()[0].getIssuerX500Principal().getName());
+                issuer = new X500Name(parent.getCertificates()[0].getSubjectX500Principal().getName());
             }
             
             String dnName = alternativeDn;
@@ -227,37 +227,46 @@ public class CertificateGenerator implements ICertificateGenerator {
      */
     public static void main(String[] args) throws Exception {
         if (args == null || args.length < 1) {
-            LOG.info("Usage: CertificateGenerator <password> [alias] [dn] [alternativeDn] [filename] [validityDays]");
+            LOG.info("Usage: CertificateGenerator [alias] [dn] [alternativeDn] [filename] [validityDays]");
             return;
         }
 
         String dn = "Test CN";
-        if (args.length > 2) {
-            dn = args[2];
+        if (args.length > 1) {
+            dn = args[1];
         }
 
         String alternativeDn = "localhost";
-        if (args.length > 3) {
-            alternativeDn = args[3];
-        }
-
-        int validityDays = 365;
-        if (args.length > 5) {
-            validityDays = Integer.parseInt(args[5]);
+        if (args.length > 2) {
+            alternativeDn = args[2];
         }
 
         String fileName = "testca";
+        if (args.length > 3) {
+            fileName = args[3];
+        }
+
+        int validityDays = 365;
         if (args.length > 4) {
-            fileName = args[4];
+            validityDays = Integer.parseInt(args[4]);
         }
 
-        String alias = "alias";
-        if (args.length > 1) {
-            alias = args[1];
+        // Read password from console (no echo) or stdin — never from a command-line argument,
+        // which would expose it in process listings and shell history.
+        final char[] password;
+        java.io.Console console = System.console();
+        if (console != null) {
+            password = console.readPassword("Keystore password: ");
+        } else {
+            String line = new java.io.BufferedReader(new java.io.InputStreamReader(System.in)).readLine();
+            if (line != null) {
+                password = line.toCharArray();
+            } else {
+                password = new char[0];
+            }
         }
 
-        String password = args[0];
-
+        String alias = args[0];
         CertificateGenerator g = new CertificateGenerator();
         CertificateStore certificateStore = g.createCreateCertificate(PKIUtil.getInstance().generateKeyPair(null, "RSA", 2048),
                                                                       dn,
@@ -265,6 +274,7 @@ public class CertificateGenerator implements ICertificateGenerator {
                                                                       new Date(),
                                                                       validityDays);
         certificateStore.write(fileName, alias, password);
+        java.util.Arrays.fill(password, '\0');
         certificateStore.writeCertificate(fileName);
         certificateStore.writePublicKey(fileName);
         certificateStore.writePrivateKey(fileName);

@@ -7,15 +7,23 @@ apply from: "https://raw.githubusercontent.com/toolarium/common-gradle-build/mas
 
 
 /****************************************************************************************
+ * Suppress obsolete source/target warnings when compiling with a newer JDK
+ ****************************************************************************************/
+tasks.withType(JavaCompile) {
+    options.compilerArgs << '-Xlint:-options'
+}
+
+
+/****************************************************************************************
  * Define project dependencies
  ****************************************************************************************/
 dependencies {
 
-    implementation "com.github.toolarium:toolarium-common:1.0.0"
+    implementation "com.github.toolarium:toolarium-common:1.1.0"
 
     // security library
-    implementation 'org.bouncycastle:bcprov-jdk18on:1.80'
-    implementation 'org.bouncycastle:bcpkix-jdk18on:1.80'
+    implementation 'org.bouncycastle:bcprov-jdk18on:1.86'
+    implementation 'org.bouncycastle:bcpkix-jdk18on:1.86'
 
     // logging
     implementation "org.slf4j:slf4j-api:${commonGradleSlf4jApiVersion}"

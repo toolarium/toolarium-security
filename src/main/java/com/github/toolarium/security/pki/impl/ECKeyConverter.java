@@ -85,9 +85,13 @@ public class ECKeyConverter extends AbstractKeyConverter {
         ByteArray normalizedData = normalizePKCS8(buffer);
 
         PKCS8EncodedKeySpec privKeySpec = new PKCS8EncodedKeySpec(Base64.getDecoder().decode(normalizedData.toBytes()));
-        LOG.debug("File format of EC private key is: " + privKeySpec.getFormat());
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("File format of EC private key is: " + privKeySpec.getFormat());
+        }
         PrivateKey privateKey = KeyFactory.getInstance(getType()).generatePrivate(privKeySpec);
-        LOG.debug("File format of EC private key is: " + privateKey.getFormat());
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("File format of EC private key is: " + privateKey.getFormat());
+        }
         return privateKey;
     }
      */

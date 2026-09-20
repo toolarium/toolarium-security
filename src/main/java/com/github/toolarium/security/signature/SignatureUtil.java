@@ -11,8 +11,6 @@ import java.security.GeneralSecurityException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.Signature;
-import javax.security.auth.DestroyFailedException;
-import javax.security.auth.Destroyable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -230,19 +228,6 @@ public final class SignatureUtil {
         final byte[] result = signer.sign();
         if (LOG.isInfoEnabled()) {
             LOG.info("Data successful signed.");
-        }
-
-        // Attempt to zero the private key material in the JVM heap. Most JCA providers do not
-        // implement destroy() fully (they throw DestroyFailedException), but we try on a best-effort
-        // basis. The caller retains ownership of the PrivateKey reference.
-        if (privateKey instanceof Destroyable) {
-            try {
-                ((Destroyable) privateKey).destroy();
-            } catch (DestroyFailedException e) {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("PrivateKey destroy() not supported by provider — key material lifetime is JVM-controlled.");
-                }
-            }
         }
 
         return result;

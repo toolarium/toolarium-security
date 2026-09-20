@@ -5,13 +5,15 @@
  */
 package com.github.toolarium.security.util;
 
-import java.io.UnsupportedEncodingException;
+import com.github.toolarium.common.security.ISecuredSecretValue;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,13 +30,16 @@ public final class CryptUtil {
     
     private static final Logger LOG = LoggerFactory.getLogger(CryptUtil.class);
     private static volatile Boolean isStrongEncryptionIsEnabled = null;
-    private static final String STRONG_CRYPTION_HELP = 
+    private static final String STRONG_CRYPTION_HELP =
             "=================================================================\n"
             + "To have access to strong cryption you have to download the \n"
             + "\"Unlimited Strength Jurisdiction Policy Files\" from the oracle \n"
             + "download page where you can download the J2SE. Install the jar \n"
             + "files in the lib/security directory of yout J2SE installation.\n"
             + "=================================================================";
+    private static final byte[] PBKDF2_SALT = "toolarium-security-v1".getBytes(StandardCharsets.UTF_8);
+    private static final int PBKDF2_ITERATIONS = 100_000;
+    private static final int PBKDF2_KEY_LENGTH_BITS = 256;
     
 
     /**
@@ -179,30 +184,102 @@ public final class CryptUtil {
 
     
     /**
-     * Create a SecretKeySpec 
-     * 
-     * @param keyString the key as string
-     * @return the SecretKeySpec
-     * @throws UnsupportedEncodingException In case of unsupported encoding
-     * @throws NoSuchAlgorithmException In case of invalid algorithm
+     * Create a SecretKeySpec from a passphrase using PBKDF2WithHmacSHA256 (AES-256).
+     *
+     * <p><strong>Note:</strong> this overload uses a library-fixed internal salt for
+     * backward-compatibility. For maximum security — especially when the same passphrase
+     * must produce distinct keys in different contexts — use
+     * {@link #createSecretKeySpec(char[], byte[], int)} and supply a unique, random salt
+     * stored alongside the ciphertext.</p>
+     *
+     * @param passphrase the passphrase as a char array (will be zeroed after use)
+     * @return the SecretKeySpec (AES-256)
+     * @throws GeneralSecurityException In case of a security error
      */
-    public SecretKeySpec createSecretKeySpec(String keyString) throws UnsupportedEncodingException, NoSuchAlgorithmException {
-        // hash keyString with SHA-256 and crop the output to 128-bit for key
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        digest.update(keyString.getBytes("UTF-8"));
-        byte[] key = new byte[16];
-        byte[] hash = digest.digest();
-        System.arraycopy(hash, 0, key, 0, key.length);
-        java.util.Arrays.fill(hash, (byte) 0);
-        SecretKeySpec spec = createSecretKeySpec(key, "AES");
-        java.util.Arrays.fill(key, (byte) 0);
-        return spec;
+    public SecretKeySpec createSecretKeySpec(char[] passphrase) throws GeneralSecurityException {
+        return createSecretKeySpec(passphrase, PBKDF2_SALT, PBKDF2_ITERATIONS);
     }
 
 
     /**
-     * Create a SecretKeySpec 
-     * 
+     * Create a SecretKeySpec from a passphrase using PBKDF2WithHmacSHA256 (AES-256).
+     *
+     * @param passphrase the passphrase as a char array (will be zeroed after use)
+     * @param salt a caller-supplied salt (should be random and at least 16 bytes)
+     * @param iterations the PBKDF2 iteration count (minimum 100 000 recommended)
+     * @return the SecretKeySpec (AES-256)
+     * @throws GeneralSecurityException In case of a security error
+     */
+    public SecretKeySpec createSecretKeySpec(char[] passphrase, byte[] salt, int iterations) throws GeneralSecurityException {
+        try {
+            PBEKeySpec pbeSpec = new PBEKeySpec(passphrase, salt, iterations, PBKDF2_KEY_LENGTH_BITS);
+            try {
+                SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+                byte[] key = factory.generateSecret(pbeSpec).getEncoded();
+                try {
+                    return createSecretKeySpec(key, "AES");
+                } finally {
+                    java.util.Arrays.fill(key, (byte) 0);
+                }
+            } finally {
+                pbeSpec.clearPassword();
+            }
+        } finally {
+            java.util.Arrays.fill(passphrase, '\0');
+        }
+    }
+
+
+    /**
+     * Create a SecretKeySpec from an {@link ISecuredSecretValue} passphrase using PBKDF2WithHmacSHA256 (AES-256).
+     *
+     * <p><strong>Note:</strong> this overload uses a library-fixed internal salt for
+     * backward-compatibility. For maximum security supply a unique, random salt via
+     * {@link #createSecretKeySpec(ISecuredSecretValue, byte[], int)}.</p>
+     *
+     * @param passphrase the passphrase
+     * @return the SecretKeySpec (AES-256)
+     * @throws GeneralSecurityException In case of a security error
+     */
+    public SecretKeySpec createSecretKeySpec(ISecuredSecretValue passphrase) throws GeneralSecurityException {
+        return createSecretKeySpec(passphrase, PBKDF2_SALT, PBKDF2_ITERATIONS);
+    }
+
+
+    /**
+     * Create a SecretKeySpec from an {@link ISecuredSecretValue} passphrase using PBKDF2WithHmacSHA256 (AES-256).
+     *
+     * @param passphrase the passphrase
+     * @param salt a caller-supplied salt (should be random and at least 16 bytes)
+     * @param iterations the PBKDF2 iteration count (minimum 100 000 recommended)
+     * @return the SecretKeySpec (AES-256)
+     * @throws GeneralSecurityException In case of a security error
+     */
+    public SecretKeySpec createSecretKeySpec(ISecuredSecretValue passphrase, byte[] salt, int iterations) throws GeneralSecurityException {
+        if (passphrase == null || passphrase.getValue() == null) {
+            throw new GeneralSecurityException("Passphrase must not be null.");
+        }
+        try {
+            return passphrase.getValue().useChars(chars -> {
+                try {
+                    return createSecretKeySpec(chars, salt, iterations);
+                } catch (GeneralSecurityException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        } catch (RuntimeException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof GeneralSecurityException) {
+                throw (GeneralSecurityException) cause;
+            }
+            throw e;
+        }
+    }
+
+
+    /**
+     * Create a SecretKeySpec
+     *
      * @param key the initial key
      * @param algorithm the algorithm
      * @return the SecretKeySpec

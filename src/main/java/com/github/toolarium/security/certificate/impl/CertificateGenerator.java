@@ -18,7 +18,7 @@ import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.Date;
 import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.x500.X500Name;
@@ -108,7 +108,7 @@ public class CertificateGenerator implements ICertificateGenerator {
             int validityDays = inputValidityDays;
             LocalDateTime maxDate;
             if (validityDays < 1) {
-                validityDays = 1; 
+                throw new IllegalArgumentException("validityDays must be >= 1, got: " + validityDays);
             }
 
             if (validityDays % 365 == 0) {
@@ -133,7 +133,8 @@ public class CertificateGenerator implements ICertificateGenerator {
             } else {
                 //PKIUtil.getInstance().logCertificate("Parent certificates:", parent.getCertificates());
                 privateKeySigner = parent.getKeyPair().getPrivate();
-                issuer = new X500Name(parent.getCertificates()[0].getSubjectX500Principal().getName());
+                // preserve exact DER encoding from the parent cert's subject — byte-level match required by PKIX path validation
+                issuer = X500Name.getInstance(ASN1Sequence.getInstance(parent.getCertificates()[0].getSubjectX500Principal().getEncoded()));
             }
             
             String dnName = alternativeDn;
@@ -156,7 +157,14 @@ public class CertificateGenerator implements ICertificateGenerator {
 
             boolean isCa = (parent == null);
             JcaX509ExtensionUtils extUtils = new JcaX509ExtensionUtils();
-            AuthorityKeyIdentifier authorityKeyIdentifier = extUtils.createAuthorityKeyIdentifier(keyPair.getPublic());
+            AuthorityKeyIdentifier authorityKeyIdentifier;
+            if (isCa) {
+                // self-signed CA: AKI references own public key
+                authorityKeyIdentifier = extUtils.createAuthorityKeyIdentifier(keyPair.getPublic());
+            } else {
+                // CA-signed cert: AKI must reference the issuer's (CA's) public key
+                authorityKeyIdentifier = extUtils.createAuthorityKeyIdentifier(parent.getCertificates()[0].getPublicKey());
+            }
             builder.addExtension(Extension.subjectKeyIdentifier, false, extUtils.createSubjectKeyIdentifier(keyPair.getPublic()));
             builder.addExtension(Extension.authorityKeyIdentifier, false, authorityKeyIdentifier);
             builder.addExtension(Extension.basicConstraints, isCa, new BasicConstraints(isCa));
@@ -182,7 +190,9 @@ public class CertificateGenerator implements ICertificateGenerator {
 
             ContentSigner signer = new JcaContentSignerBuilder(signatureAlgorithm).setProvider(BC_PROVIDER).build(privateKeySigner);
             X509CertificateHolder holder = builder.build(signer);
-            X509Certificate cert = new JcaX509CertificateConverter().setProvider(BC_PROVIDER).getCertificate(holder);
+            // use the default JDK CertificateFactory (no BC provider) so the resulting X509Certificate
+            // is a JDK-native instance — required for compatibility with the JDK's PKIX CertPathValidator.
+            X509Certificate cert = new JcaX509CertificateConverter().getCertificate(holder);
             
             int size = 1;
             if (parent != null && parent.getCertificates() != null) {
@@ -258,7 +268,10 @@ public class CertificateGenerator implements ICertificateGenerator {
         if (console != null) {
             password = console.readPassword("Keystore password: ");
         } else {
-            String line = new java.io.BufferedReader(new java.io.InputStreamReader(System.in)).readLine();
+            String line;
+            try (java.io.BufferedReader br = new java.io.BufferedReader(new java.io.InputStreamReader(System.in))) {
+                line = br.readLine();
+            }
             if (line != null) {
                 password = line.toCharArray();
             } else {
@@ -288,7 +301,7 @@ public class CertificateGenerator implements ICertificateGenerator {
      * @return the {@link LocalDateTime}.
      */
     private LocalDateTime dateToLocalDateTime(Date date) {
-        return LocalDateTime.ofInstant(date.toInstant(), ZoneId.systemDefault());
+        return LocalDateTime.ofInstant(date.toInstant(), ZoneOffset.UTC);
     }
 
     
@@ -299,6 +312,6 @@ public class CertificateGenerator implements ICertificateGenerator {
      * @return the {@link Date}.
      */
     private Date localDateTimeToDate(LocalDateTime localDateTime) {
-        return Date.from(localDateTime.atZone(ZoneId.systemDefault()).toInstant());
+        return Date.from(localDateTime.atZone(ZoneOffset.UTC).toInstant());
     }
 }

@@ -16,6 +16,7 @@ import java.security.KeyPair;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.util.Arrays;
 import java.util.Base64;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -175,7 +176,12 @@ public abstract class AbstractKeyConverter implements IKeyConverter {
         if (privateKey == null) {
             return null;
         }
-        
-        return formatPKCS8(new String(Base64.getEncoder().encode(privateKey.getEncoded())));
+
+        byte[] encoded = privateKey.getEncoded();
+        try {
+            return formatPKCS8(new String(Base64.getEncoder().encode(encoded)));
+        } finally {
+            Arrays.fill(encoded, (byte) 0);
+        }
     }
 }

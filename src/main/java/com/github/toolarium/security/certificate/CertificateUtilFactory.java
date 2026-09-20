@@ -18,11 +18,11 @@ import com.github.toolarium.security.certificate.impl.CertificateVerifier;
  * @author patrick
  */
 public final class CertificateUtilFactory {
-    private ICertificateGenerator certificateGenerator;
-    private ICertificateConverter certificateConverter;
-    private ICertificateFilter certificateFilter;
-    private ICertificateVerifier certificateVerifier;
-    private ICertificateChainAnalyzer certificateChainAnalyzer;
+    private volatile ICertificateGenerator certificateGenerator;
+    private volatile ICertificateConverter certificateConverter;
+    private volatile ICertificateFilter certificateFilter;
+    private volatile ICertificateVerifier certificateVerifier;
+    private volatile ICertificateChainAnalyzer certificateChainAnalyzer;
     
     
     /**
@@ -60,9 +60,12 @@ public final class CertificateUtilFactory {
      */
     public ICertificateGenerator getGenerator() {
         if (certificateGenerator == null) {
-            certificateGenerator = new CertificateGenerator(); 
+            synchronized (this) {
+                if (certificateGenerator == null) {
+                    certificateGenerator = new CertificateGenerator();
+                }
+            }
         }
-        
         return certificateGenerator;
     }
     
@@ -74,9 +77,12 @@ public final class CertificateUtilFactory {
      */
     public ICertificateConverter getConverter() {
         if (certificateConverter == null) {
-            certificateConverter = new CertificateConverter(); 
+            synchronized (this) {
+                if (certificateConverter == null) {
+                    certificateConverter = new CertificateConverter();
+                }
+            }
         }
-        
         return certificateConverter;
     }
     
@@ -88,9 +94,12 @@ public final class CertificateUtilFactory {
      */
     public ICertificateFilter getFilter() {
         if (certificateFilter == null) {
-            certificateFilter = new CertificateFilter(); 
+            synchronized (this) {
+                if (certificateFilter == null) {
+                    certificateFilter = new CertificateFilter();
+                }
+            }
         }
-        
         return certificateFilter;
     }
 
@@ -102,9 +111,12 @@ public final class CertificateUtilFactory {
      */
     public ICertificateVerifier getVerifier() {
         if (certificateVerifier == null) {
-            certificateVerifier = new CertificateVerifier(); 
+            synchronized (this) {
+                if (certificateVerifier == null) {
+                    certificateVerifier = new CertificateVerifier();
+                }
+            }
         }
-        
         return certificateVerifier;
     }
 
@@ -116,9 +128,12 @@ public final class CertificateUtilFactory {
      */
     public ICertificateChainAnalyzer geChainAnalyzer() {
         if (certificateChainAnalyzer == null) {
-            certificateChainAnalyzer = new CertificateChainAnalyzer(); 
+            synchronized (this) {
+                if (certificateChainAnalyzer == null) {
+                    certificateChainAnalyzer = new CertificateChainAnalyzer();
+                }
+            }
         }
-        
         return certificateChainAnalyzer;
     }
 }

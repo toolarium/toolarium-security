@@ -85,7 +85,9 @@ public class DSAKeyConverter extends AbstractKeyConverter {
         ByteArray normalizedData = normalizePKCS8(buffer);
 
         PKCS8EncodedKeySpec privKeySpec = new PKCS8EncodedKeySpec(Base64.getDecoder().decode(normalizedData.toBytes()));
-        LOG.debug("File format of private key is: " + privKeySpec.getFormat());
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("File format of private key is: " + privKeySpec.getFormat());
+        }
         KeyFactory keyFactory = KeyFactory.getInstance(getType());
         return keyFactory.generatePrivate(privKeySpec);
     }

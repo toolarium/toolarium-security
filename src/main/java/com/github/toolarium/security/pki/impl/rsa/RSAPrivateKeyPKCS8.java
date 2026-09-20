@@ -114,10 +114,16 @@ public class RSAPrivateKeyPKCS8 implements RSAPrivateKey {
             encoded = dos.toByteArray();
             dos.close();
         } catch (Exception ex) {
-            LOG.warn("Could not encode RSA private key!", ex);
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Could not encode RSA private key!", ex);
+            }
+            LOG.warn("Could not encode RSA private key!: " + ex.getMessage());
         }
 
-        return encoded;
+        if (encoded == null) {
+            return null;
+        }
+        return encoded.clone();
     }
 
 

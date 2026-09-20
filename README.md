@@ -181,6 +181,12 @@ SSLEngine engine = ctx.createSSLEngine(host, port);
 SSLContextFactory.getInstance().applyCipherSuites(engine,
     "TLS_AES_128_GCM_SHA256",
     "TLS_AES_256_GCM_SHA384");
+
+// Or use the built-in recommended allowlist (TLS 1.3 + TLS 1.2, forward secrecy, AES-GCM/ChaCha20)
+SSLContext ctx = SSLContextFactory.getInstance().createSslContext(provider,
+    SSLContextFactory.RECOMMENDED_CIPHER_SUITES);
+SSLContextFactory.getInstance().applyCipherSuites(engine,
+    SSLContextFactory.RECOMMENDED_CIPHER_SUITES);
 ```
 
 #### Load an SSL context from existing keystore files

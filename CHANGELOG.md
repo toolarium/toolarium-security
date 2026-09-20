@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [ 1.1.7 ] - 2026-09-18
+## [ 1.1.7 ] - 2026-09-20
 ### Changed
 - Updated dependencies: toolarium-common 1.1.0, BouncyCastle 1.86.
 - Migrated all password handling from `ISecuredValue<String>` / `String` to `ISecuredSecretValue` / `char[]` across KeyStoreUtil, SecurityManagerProviderFactory, SecurityManagerProviderImpl, CertificateStore, and CertificateGenerator to avoid plaintext password exposure in heap memory.
@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SSLContextFactory: replaced class-level WARNING comment with usage documentation; added `createSslContext(ISecurityManagerProvider, String...)` overload to allow an explicit cipher suite allow-list, and `applyCipherSuites(SSLEngine, String...)` helper that validates suites against JVM-supported ones.
 - CryptUtil: restored `ALGORITHM_AES` constant (was accidentally commented out).
 - `volatile` added to `CertificateVerifier.revocationEnabled` for correct multi-threaded visibility.
+- CertificateVerifier: replaced `System.setProperty("com.sun.security.enableCRLDP")` with scoped `PKIXRevocationChecker` (PREFER_CRLS + NO_FALLBACK + SOFT_FAIL) to avoid global JVM state and gracefully handle certs without CRL/OCSP endpoints.
+- CertificateGenerator: fixed issuer DN to preserve exact DER bytes from parent cert; fixed AuthorityKeyIdentifier on leaf certs to reference the issuer's public key; use JDK-native X509Certificate for PKIX path validator compatibility.
+- DERInputStream: added bounds check before `data[offset+1]` access to prevent ArrayIndexOutOfBoundsException on malformed DER input.
+- SSLContextFactory: upgraded from `TLSv1.2` to `TLS` context so TLS 1.3 is negotiated when both peers support it; added `RECOMMENDED_CIPHER_SUITES` constant covering TLS 1.3 (AES-GCM, ChaCha20) and TLS 1.2 (ECDHE/DHE + AES-GCM) suites.
 
 ## [ 1.1.6 ] - 2026-05-11
 ### Changed

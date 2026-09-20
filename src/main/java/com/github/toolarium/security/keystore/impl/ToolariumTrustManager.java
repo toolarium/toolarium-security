@@ -251,7 +251,7 @@ public class ToolariumTrustManager implements javax.net.ssl.X509TrustManager {
         } catch (Exception ex) {
             certCheckResult = CERT_CHECKFAILED;
             StackTrace.processStackTrace(LOG::warn, StackTrace.DEFAULT_EXCLUDES, "Fatal Error on Server Certificate Verification: ", 3);
-            throw new CertificateException("Fatal Error on Server Certificate Verification!");
+            throw new CertificateException("Fatal Error on Server Certificate Verification!", ex);
         }
     }
 
@@ -277,11 +277,11 @@ public class ToolariumTrustManager implements javax.net.ssl.X509TrustManager {
         } catch (Exception ex) {
             certCheckResult = CERT_CHECKFAILED;
             StackTrace.processStackTrace(LOG::warn, StackTrace.DEFAULT_EXCLUDES, "Fatal Error on Server Certificate Verification: ", 3);
-            throw new CertificateException("Fatal Error on Server Certificate Verification!");
+            throw new CertificateException("Fatal Error on Server Certificate Verification!", ex);
         }
     }
 
-    
+
     /**
      * Checks the certificate chain
      * 
@@ -307,16 +307,23 @@ public class ToolariumTrustManager implements javax.net.ssl.X509TrustManager {
         } catch (Exception ex) {
             certCheckResult = CERT_CHECKFAILED;
             StackTrace.processStackTrace(LOG::warn, StackTrace.DEFAULT_EXCLUDES, "Fatal Error on Server Certificate Verification: ", 3);
-            throw new CertificateException("Fatal Error on Server Certificate Verification!");
+            throw new CertificateException("Fatal Error on Server Certificate Verification!", ex);
         }
     }
 
-    
+
     /**
-     * Check if the given certificate should be trust and added to the certificate server list
-     * 
+     * Check if the given certificate should be trusted and added to the trusted certificate list.
+     *
+     * <p><strong>WARNING:</strong> This default implementation uses a trust-on-first-use (TOFU)
+     * policy and unconditionally returns {@code true}, accepting <em>any</em> server certificate
+     * without CA validation. This is intentional for internal PKI / self-signed certificate
+     * scenarios, but is <strong>not safe for production use against public CAs</strong>.
+     * Subclasses must override this method to enforce a proper trust policy (e.g. pin to a
+     * known certificate fingerprint or validate against a local trust store).</p>
+     *
      * @param certificate the server certificate
-     * @return true if we trust the server certificate
+     * @return true if the server certificate should be trusted
      */
     protected boolean trustServerCertificate(X509Certificate certificate) {
         return true;

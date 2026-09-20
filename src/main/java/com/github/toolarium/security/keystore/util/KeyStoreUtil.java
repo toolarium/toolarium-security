@@ -276,6 +276,10 @@ public final class KeyStoreUtil {
             throw new GeneralSecurityException("Could not write keystore: " + fileName);
         }
 
+        if (new File(fileName).exists()) {
+            LOG.info("Overwriting existing keystore [" + fileName + "].");
+        }
+
         final KeyStore finalKs = ks;
         withSecret(password, chars -> {
             finalKs.load(null, chars);
@@ -371,28 +375,35 @@ public final class KeyStoreUtil {
             return result;
         }
 
-        final KeyStore trustManagerKeyStore = KeyStoreUtil.getInstance().createKeyStore(null);
-        X509TrustManager defaultTm = KeyStoreUtil.getInstance().getDefaultX509TrustManager();
-        X509Certificate[] trustedIssuers = defaultTm.getAcceptedIssuers();
-        if (trustedIssuers != null) {
-            int i = 1;
-
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Init new default trust stire with default trusted issuers: " + trustedIssuers.length);
+        synchronized (this) {
+            result = cachedDefaultTrustKeyStore;
+            if (result != null) {
+                return result;
             }
 
-            for (X509Certificate trustedIssuer : trustedIssuers) {
-                // add the key manager store in the trust store
-                trustManagerKeyStore.setCertificateEntry("cert" + i++, trustedIssuer);
-                
-                //if (LOG.isDebugEnabled()) {
-                //    PKIUtil.getInstance().processCertificate(LOG::debug, "Add certificate to trust store:", trustedIssuers);
-                //}
+            final KeyStore trustManagerKeyStore = KeyStoreUtil.getInstance().createKeyStore(null);
+            X509TrustManager defaultTm = KeyStoreUtil.getInstance().getDefaultX509TrustManager();
+            X509Certificate[] trustedIssuers = defaultTm.getAcceptedIssuers();
+            if (trustedIssuers != null) {
+                int i = 1;
+
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("Init new default trust stire with default trusted issuers: " + trustedIssuers.length);
+                }
+
+                for (X509Certificate trustedIssuer : trustedIssuers) {
+                    // add the key manager store in the trust store
+                    trustManagerKeyStore.setCertificateEntry("cert" + i++, trustedIssuer);
+
+                    //if (LOG.isDebugEnabled()) {
+                    //    PKIUtil.getInstance().processCertificate(LOG::debug, "Add certificate to trust store:", trustedIssuers);
+                    //}
+                }
             }
+
+            cachedDefaultTrustKeyStore = trustManagerKeyStore;
+            return trustManagerKeyStore;
         }
-
-        cachedDefaultTrustKeyStore = trustManagerKeyStore;
-        return trustManagerKeyStore;
     }
 
     

@@ -27,8 +27,16 @@ import java.util.EnumSet;
 
 
 /**
- * Defines the certificate store
- * 
+ * Defines the certificate store.
+ *
+ * <p><strong>Serialization warning:</strong> This class implements {@link java.io.Serializable}
+ * and holds a {@link java.security.KeyPair} (including the private key). Java serialization
+ * will write the raw private-key bytes to whatever {@link java.io.ObjectOutputStream} target
+ * is used — typically a file or network stream — with no encryption.  Never serialize
+ * instances of this class unless the destination is explicitly protected (e.g. an encrypted
+ * key store).  Prefer {@link #write(String, String, char[])} or {@link #toKeyStore} for
+ * persistent storage.</p>
+ *
  * @author patrick
  */
 public class CertificateStore implements Serializable {

@@ -12,10 +12,12 @@ import java.security.cert.CertPath;
 import java.security.cert.CertPathValidator;
 import java.security.cert.CertificateFactory;
 import java.security.cert.PKIXParameters;
+import java.security.cert.PKIXRevocationChecker;
 import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -188,18 +190,24 @@ public class CertificateVerifier implements ICertificateVerifier {
             return;
         }
 
+        PKIXParameters params = new PKIXParameters(Collections.singleton(trustAnchor));
+        CertPathValidator validator = CertPathValidator.getInstance("PKIX");
+        PKIXRevocationChecker revocationChecker = (PKIXRevocationChecker) validator.getRevocationChecker();
+        // PREFER_CRLS: check CRL before OCSP.
+        // NO_FALLBACK: do not fall back to OCSP if CRL check fails (avoids "no OCSP endpoint" errors).
+        // SOFT_FAIL: if CRL info is unavailable (no CRL Distribution Point or unreachable), treat the
+        // certificate as not revoked — matching the old setRevocationEnabled(true) behavior where certs
+        // without CRL Distribution Points were silently accepted.
+        revocationChecker.setOptions(EnumSet.of(
+                PKIXRevocationChecker.Option.PREFER_CRLS,
+                PKIXRevocationChecker.Option.NO_FALLBACK,
+                PKIXRevocationChecker.Option.SOFT_FAIL));
+        // disable the old built-in revocation mechanism (which requires a JVM-wide System.setProperty);
+        // revocation is handled by the explicitly added PKIXRevocationChecker instead.
+        params.setRevocationEnabled(false);
+        params.addCertPathChecker(revocationChecker);
         CertificateFactory cf = CertificateFactory.getInstance("X.509");
         CertPath certPath = cf.generateCertPath(Arrays.asList(Arrays.copyOf(certs, pathLength)));
-
-        PKIXParameters params = new PKIXParameters(Collections.singleton(trustAnchor));
-        params.setRevocationEnabled(true);
-
-        // enable CRL distribution point checking if not already enabled
-        if (!"true".equals(System.getProperty("com.sun.security.enableCRLDP"))) {
-            System.setProperty("com.sun.security.enableCRLDP", "true");
-        }
-
-        CertPathValidator validator = CertPathValidator.getInstance("PKIX");
         validator.validate(certPath, params);
 
         if (LOG.isDebugEnabled()) {

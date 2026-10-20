@@ -23,7 +23,7 @@ import org.slf4j.LoggerFactory;
  */
 public class ToolariumKeyManager implements javax.net.ssl.X509KeyManager {
     private static final Logger LOG = LoggerFactory.getLogger(ToolariumKeyManager.class);
-    private X509KeyManager x509KeyManager;
+    private final X509KeyManager x509KeyManager;
     
     
     /**
@@ -86,8 +86,7 @@ public class ToolariumKeyManager implements javax.net.ssl.X509KeyManager {
      */
     @Override
     public String chooseServerAlias(String keyType, Principal[] issuers, Socket socket) {
-        String returnType = "RSA";
-
+        String returnType = null;
         if (keyType != null) {
             returnType = x509KeyManager.chooseServerAlias(keyType, issuers, socket);
         }
@@ -95,7 +94,7 @@ public class ToolariumKeyManager implements javax.net.ssl.X509KeyManager {
         if (LOG.isDebugEnabled()) {
             LOG.debug("Choose " + keyType + " as server alias: " + returnType);
         }
-            
+
         return returnType;
     }
     
@@ -119,8 +118,7 @@ public class ToolariumKeyManager implements javax.net.ssl.X509KeyManager {
      */
     @Override
     public String chooseClientAlias(String[] keyType, Principal[] issuers, Socket socket) {
-        String returnType = "DSA";
-
+        String returnType = null;
         if (keyType != null) {
             returnType = x509KeyManager.chooseClientAlias(keyType, issuers, socket);
         }
@@ -128,7 +126,7 @@ public class ToolariumKeyManager implements javax.net.ssl.X509KeyManager {
         if (LOG.isDebugEnabled()) {
             LOG.debug("Choose " + returnType + " as client alias.");
         }
-        
+
         return returnType;
     }
 }

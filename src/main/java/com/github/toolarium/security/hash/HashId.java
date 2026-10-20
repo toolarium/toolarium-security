@@ -217,29 +217,30 @@ public final class HashId {
      */
     private String encode(long[] numbers, String inputAlphabet, String inputSalt, int inputMinHashLength) {
         String alphabet = inputAlphabet;
-        String ret = "";
+        StringBuilder ret = new StringBuilder();
         String shuffeltSeps = consistentShuffle(join(seps, ""), join(numbers, ""));
         char lotteryChar = 0;
 
         for (int i = 0; i < numbers.length; i++) {
             if (i == 0) {
-                String lotterySalt = join(numbers, "-");
+                StringBuilder lotterySaltBuilder = new StringBuilder(join(numbers, "-"));
                 for (long number : numbers) {
-                    lotterySalt += "-" + (number + 1) * 2;
+                    lotterySaltBuilder.append("-").append((number + 1) * 2);
                 }
-                
+                String lotterySalt = lotterySaltBuilder.toString();
+
                 String lottery = consistentShuffle(alphabet, lotterySalt);
                 lotteryChar = lottery.charAt(0);
-                ret += lotteryChar;
+                ret.append(lotteryChar);
 
-                alphabet = lotteryChar + alphabet.replaceAll(String.valueOf(lotteryChar), "");
+                alphabet = lotteryChar + alphabet.replace(String.valueOf(lotteryChar), "");
             }
 
             alphabet = consistentShuffle(alphabet, (lotteryChar & 12345) + inputSalt);
-            ret += hash(numbers[i], alphabet);
+            ret.append(hash(numbers[i], alphabet));
 
             if (i + 1 < numbers.length) {
-                ret += shuffeltSeps.charAt((int) ((numbers[i] + i) % shuffeltSeps.length()));
+                ret.append(shuffeltSeps.charAt((int) ((numbers[i] + i) % shuffeltSeps.length())));
             }
         }
 
@@ -248,16 +249,16 @@ public final class HashId {
             for (int i = 0; i < numbers.length; i++) {
                 firstIndex += (i + 1) * numbers[i];
             }
-            
+
             int guardIndex = firstIndex % guards.size();
             if (guardIndex >= 0) {
                 char guard = guards.get(guardIndex);
-                ret = guard + ret;
-    
+                ret.insert(0, guard);
+
                 if (ret.length() < inputMinHashLength) {
                     guardIndex = (guardIndex + ret.length()) % guards.size();
                     guard = guards.get(guardIndex);
-                    ret += guard;
+                    ret.append(guard);
                 }
             }
         }
@@ -268,16 +269,16 @@ public final class HashId {
             String padLeft = encode(padArray, alphabet, inputSalt, 0);
             String padRight = encode(padArray, alphabet, join(padArray, ""), 0);
 
-            ret = padLeft + ret + padRight;
+            ret = new StringBuilder(padLeft).append(ret).append(padRight);
             int excess = ret.length() - inputMinHashLength;
             if (excess > 0) {
-                ret = ret.substring(excess / 2, excess / 2 + inputMinHashLength);
+                ret = new StringBuilder(ret.substring(excess / 2, excess / 2 + inputMinHashLength));
             }
 
-            alphabet = consistentShuffle(alphabet, inputSalt + ret);
+            alphabet = consistentShuffle(alphabet, inputSalt + ret.toString());
         }
 
-        return ret;
+        return ret.toString();
     }
     
     
@@ -295,7 +296,7 @@ public final class HashId {
         if (hash != null && !hash.isEmpty()) {
 
             for (char guard : guards) {
-                hash = hash.replaceAll(String.valueOf(guard), " ");
+                hash = hash.replace(guard, ' ');
             }
             
             String[] hashSplit = StringUtil.getInstance().splitAsArray(hash, " ");
@@ -306,7 +307,7 @@ public final class HashId {
             }
 
             for (char sep : seps) {
-                hash = hash.replaceAll(String.valueOf(sep), " ");
+                hash = hash.replace(sep, ' ');
             }
             
             String a = "";
@@ -319,7 +320,7 @@ public final class HashId {
                     if (i == 0) {
                         lotteryChar = hash.charAt(0);
                         subHash = subHash.substring(1);
-                        a = lotteryChar + alphabet.replaceAll(String.valueOf(lotteryChar), "");
+                        a = lotteryChar + alphabet.replace(String.valueOf(lotteryChar), "");
                     }
                 }
 
@@ -350,10 +351,10 @@ public final class HashId {
         long number = inputNumber;
         String hash = "";
 
-        while (number > 0) {
+        do {
             hash = inputAlphabet.charAt((int) (number % inputAlphabet.length())) + hash;
             number = number / inputAlphabet.length();
-        }
+        } while (number > 0);
 
         return hash;
     }
@@ -416,18 +417,21 @@ public final class HashId {
                 sortingArray[i] = Math.abs(sortingArray[i]);
             }
 
+            // Use char[] + System.arraycopy to preserve the same removal-by-shift order as the
+            // original ArrayList.remove(int), while avoiding O(n) object allocation per step.
+            // StringBuilder replaces O(n²) string concatenation with O(n) amortised appends.
+            char[] remaining = alphabet.toCharArray();
+            int len = remaining.length;
+            StringBuilder sb = new StringBuilder(len);
             int i = 0;
-            List<String> alphabetArray = charArrayToStringList(alphabet.toCharArray());
-            while (alphabetArray.size() > 0) {
-                int pos = sortingArray[i];
-                if (pos >= alphabetArray.size()) {
-                    pos %= alphabetArray.size();
-                }
-                
-                ret += alphabetArray.get(pos);
-                alphabetArray.remove(pos);
-                i = ++i % sortingArray.length;
+            while (len > 0) {
+                int pos = sortingArray[i] % len;
+                sb.append(remaining[pos]);
+                System.arraycopy(remaining, pos + 1, remaining, pos, len - pos - 1);
+                len--;
+                i = (i + 1) % sortingArray.length;
             }
+            ret = sb.toString();
         }
 
         return ret;
@@ -453,22 +457,6 @@ public final class HashId {
 
     
     /**
-     * Convert a char array into a string list
-     * 
-     * @param chars the char array
-     * @return the string list
-     */
-    private static List<String> charArrayToStringList(char[] chars) {
-        ArrayList<String> list = new ArrayList<String>(chars.length);
-        for (char c : chars) {
-            list.add(String.valueOf(c));
-        }
-        
-        return list;
-    }
-
-    
-    /**
      * Join long array with delimiter
      * 
      * @param longList the long value array
@@ -478,11 +466,7 @@ public final class HashId {
     private static String join(long[] longList, String delimiter) {
         ArrayList<String> strList = new ArrayList<String>(longList.length);
         for (long l : longList) {
-            if (l < 0) {
-                strList.add(String.valueOf(l));
-            } else { 
-                strList.add(String.valueOf(l));
-            }
+            strList.add(String.valueOf(l));
         }
 
         return join(strList, delimiter);

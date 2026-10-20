@@ -168,50 +168,11 @@ public final class JsonSignatureUtil {
             throw new IllegalArgumentException("Invalid JSON!");
         }
 
-        final String json = trimStartingNewlines(trimEndingNewlines(inputJson));
+        final String json = inputJson.trim();
         if (!json.startsWith(OPEN_BRACE) || !json.endsWith(ENDING_BRACE)) {
             throw new IllegalArgumentException("Invalid JSON!");
         }
         return json;
     }
    
-    
-    /**
-     * Trim starting newlines
-     *
-     * @param input the input
-     * @return the prepared input
-     */
-    private String trimStartingNewlines(String input) {
-        if (input == null) {
-            return input;
-        }
-        
-        String json = input.trim();
-        while (!json.isEmpty() && (json.startsWith("\r") || json.startsWith(NL))) {
-            json = json.substring(1);
-        }
-        
-        return json;
-    }
-
-
-    /**
-     * Trim ending newlines
-     *
-     * @param input the input
-     * @return the prepared input
-     */
-    private String trimEndingNewlines(String input) {
-        if (input == null) {
-            return input;
-        }
-        
-        String json = input.trim();
-        while (!json.isEmpty() && (json.endsWith("\r") || json.endsWith(NL))) {
-            json = json.substring(0, json.length() - 1);
-        }
-        
-        return json;
-    }
 }

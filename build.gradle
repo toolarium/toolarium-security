@@ -19,7 +19,7 @@ tasks.withType(JavaCompile) {
  ****************************************************************************************/
 dependencies {
 
-    implementation "com.github.toolarium:toolarium-common:1.1.0"
+    implementation "com.github.toolarium:toolarium-common:1.2.0"
 
     // security library
     implementation 'org.bouncycastle:bcprov-jdk18on:1.86'

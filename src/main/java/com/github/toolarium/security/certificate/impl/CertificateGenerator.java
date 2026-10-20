@@ -186,6 +186,8 @@ public class CertificateGenerator implements ICertificateGenerator {
                 //signatureAlgorithm = "SHA256WithRSAEncryption";
             } else if ("EC".equals(keyPair.getPublic().getAlgorithm())) {
                 signatureAlgorithm = "SHA256withECDSA";
+            } else if ("DSA".equals(keyPair.getPublic().getAlgorithm())) {
+                signatureAlgorithm = "SHA256withDSA";
             }
 
             ContentSigner signer = new JcaContentSignerBuilder(signatureAlgorithm).setProvider(BC_PROVIDER).build(privateKeySigner);

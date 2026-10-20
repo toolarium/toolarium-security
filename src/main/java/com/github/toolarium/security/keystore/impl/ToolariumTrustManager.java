@@ -40,7 +40,7 @@ public class ToolariumTrustManager implements javax.net.ssl.X509TrustManager {
     private static final int CERT_INVALIDCOMMONNAME = 6;
     
     private final ConcurrentHashMap<String, X509Certificate> trustedCerts;
-    private volatile int certCheckResult;
+    private final ThreadLocal<Integer> certCheckResult;
     private volatile boolean verifyCertificate;
 
     
@@ -49,7 +49,7 @@ public class ToolariumTrustManager implements javax.net.ssl.X509TrustManager {
      */
     public ToolariumTrustManager() {
         trustedCerts = new ConcurrentHashMap<String, X509Certificate>();
-        certCheckResult = CERT_NOT_CHECKED;
+        certCheckResult = ThreadLocal.withInitial(() -> CERT_NOT_CHECKED);
         verifyCertificate = true;
     }
     
@@ -95,19 +95,22 @@ public class ToolariumTrustManager implements javax.net.ssl.X509TrustManager {
             throw new CertificateException("Server certificate chain is empty!");
         }
 
-        // check if the server certificate should be added or not
-        for (int i = 0; i < chain.length; i++) {
-            if (LOG.isDebugEnabled()) {
+        if (LOG.isDebugEnabled()) {
+            for (int i = 0; i < chain.length; i++) {
                 LOG.debug("Server certificate #" + (i + 1) + ": \n" + CertificateUtilFactory.getInstance().getConverter().formatPKCS7(chain[i]));
-            }
-
-            if (trustServerCertificate(chain[i])) {
-                addTrustedCertificate(chain[i]);
             }
         }
 
         if (verifyCertificate) {
             verifyCertificateChain(chain, protocol);
+        }
+
+        // Only add certificates after successful verification so that a cert that fails
+        // verification is not left in the trust store for subsequent connection attempts.
+        for (int i = 0; i < chain.length; i++) {
+            if (trustServerCertificate(chain[i])) {
+                addTrustedCertificate(chain[i]);
+            }
         }
     }
 
@@ -136,7 +139,7 @@ public class ToolariumTrustManager implements javax.net.ssl.X509TrustManager {
      * @return the check result
      */
     public int getCheckResult() {
-        return certCheckResult;
+        return certCheckResult.get();
     }        
     
     
@@ -148,7 +151,7 @@ public class ToolariumTrustManager implements javax.net.ssl.X509TrustManager {
      * @throws CertificateException in case of error
      */
     public void verifyCertificateChain(X509Certificate[] chain, String protocol) throws CertificateException {
-        certCheckResult = CERT_NOT_CHECKED;
+        certCheckResult.set(CERT_NOT_CHECKED);
         int len = chain.length;
         if (len == 0) {
             return;
@@ -167,7 +170,7 @@ public class ToolariumTrustManager implements javax.net.ssl.X509TrustManager {
         // Retrieve the Common Name 'CN' for which the Server Certificate has been issued.
         String commonName = subjectcert.getSubjectX500Principal().getName();
         if (commonName == null) {
-            certCheckResult = CERT_CHECKFAILED;
+            certCheckResult.set(CERT_CHECKFAILED);
             StackTrace.processStackTrace(LOG::warn, StackTrace.DEFAULT_EXCLUDES, "Fatal Error on Server Certificate Verification: ", 3);
             throw new CertificateException("Fatal Error on Server Certificate Verification!");
         }
@@ -183,12 +186,12 @@ public class ToolariumTrustManager implements javax.net.ssl.X509TrustManager {
                 // The Common Name 'CN' for which the Server Certificate has been issued has to match the Server we want to contact
                 if (!server.equalsIgnoreCase(name)) {
                     StackTrace.processStackTrace(LOG::warn, StackTrace.DEFAULT_EXCLUDES, "Common Name of Certificate different from Servername on Server Certificate Verification ([" + server + "] != [" + name + "]): ", 3);
-                    certCheckResult = CERT_INVALIDCOMMONNAME;
+                    certCheckResult.set(CERT_INVALIDCOMMONNAME);
                     throw new CertificateException("Common Name of Certificate different from Servername on Server Certificate Verification");
                 }
             } catch (RuntimeException e) {
                 StackTrace.processStackTrace(LOG::warn, StackTrace.DEFAULT_EXCLUDES, "Invalid common name (" + commonName + "): ", 3);
-                certCheckResult = CERT_INVALIDCOMMONNAME;
+                certCheckResult.set(CERT_INVALIDCOMMONNAME);
                 throw new CertificateException("Invalid common name: " + commonName + ": " + e.getMessage());
             }
         }
@@ -203,7 +206,7 @@ public class ToolariumTrustManager implements javax.net.ssl.X509TrustManager {
                 String caDN = c.getIssuerX500Principal().getName();
                 X509Certificate cacert = trustedCerts.get(caDN);
                 if ((cacert == null) || !(c.equals(cacert))) {
-                    certCheckResult = CERT_UNKNOWNCA;
+                    certCheckResult.set(CERT_UNKNOWNCA);
                     StackTrace.processStackTrace(LOG::warn, StackTrace.DEFAULT_EXCLUDES, "Unknown CA, Server Certificate Verification: ", 3);
                     throw new CertificateException("Unknown CA, Server Certificate Verification!");
                 }
@@ -227,7 +230,7 @@ public class ToolariumTrustManager implements javax.net.ssl.X509TrustManager {
         String dn = cert.getIssuerX500Principal().getName();
         X509Certificate c = trustedCerts.get(dn);
         if ((c == null) || !(cert.equals(c))) {
-            certCheckResult = CERT_UNKNOWNCA;
+            certCheckResult.set(CERT_UNKNOWNCA);
             StackTrace.processStackTrace(LOG::warn, StackTrace.DEFAULT_EXCLUDES, "Unknown CA, Server Certificate Verification: ", 3);
                 
             if (LOG.isDebugEnabled()) {
@@ -241,15 +244,15 @@ public class ToolariumTrustManager implements javax.net.ssl.X509TrustManager {
             // verify that the subject certificate is valid
             cert.checkValidity();
         } catch (CertificateExpiredException ex) {
-            certCheckResult = CERT_CERTEXPIRED;
+            certCheckResult.set(CERT_CERTEXPIRED);
             StackTrace.processStackTrace(LOG::warn, StackTrace.DEFAULT_EXCLUDES, "Certificate Expired on Server Certificate Verification: ", 3);
             throw new CertificateException("Certificate Expired on Server Certificate Verification!");
         } catch (CertificateNotYetValidException ex) {
-            certCheckResult = CERT_CERTEXPIRED;
+            certCheckResult.set(CERT_CERTEXPIRED);
             StackTrace.processStackTrace(LOG::warn, StackTrace.DEFAULT_EXCLUDES, "Certificate Expired on Server Certificate Verification: ", 3);
             throw new CertificateException("Certificate Expired on Server Certificate Verification!");
         } catch (Exception ex) {
-            certCheckResult = CERT_CHECKFAILED;
+            certCheckResult.set(CERT_CHECKFAILED);
             StackTrace.processStackTrace(LOG::warn, StackTrace.DEFAULT_EXCLUDES, "Fatal Error on Server Certificate Verification: ", 3);
             throw new CertificateException("Fatal Error on Server Certificate Verification!", ex);
         }
@@ -267,15 +270,15 @@ public class ToolariumTrustManager implements javax.net.ssl.X509TrustManager {
         try {
             cacert.checkValidity();
         } catch (CertificateExpiredException ex) {
-            certCheckResult = CERT_CAEXPIRED;
+            certCheckResult.set(CERT_CAEXPIRED);
             StackTrace.processStackTrace(LOG::warn, StackTrace.DEFAULT_EXCLUDES, "CA Certificate Expired on Server Certificate Verification: ", 3);
             throw new CertificateException("CA Certificate Expired on Server Certificate Verification!");
         } catch (CertificateNotYetValidException ex) {
-            certCheckResult = CERT_CAEXPIRED;
+            certCheckResult.set(CERT_CAEXPIRED);
             StackTrace.processStackTrace(LOG::warn, StackTrace.DEFAULT_EXCLUDES, "CA Certificate Expired on Server Certificate Verification: ", 3);
             throw new CertificateException("CA Certificate Expired on Server Certificate Verification");
         } catch (Exception ex) {
-            certCheckResult = CERT_CHECKFAILED;
+            certCheckResult.set(CERT_CHECKFAILED);
             StackTrace.processStackTrace(LOG::warn, StackTrace.DEFAULT_EXCLUDES, "Fatal Error on Server Certificate Verification: ", 3);
             throw new CertificateException("Fatal Error on Server Certificate Verification!", ex);
         }
@@ -293,19 +296,19 @@ public class ToolariumTrustManager implements javax.net.ssl.X509TrustManager {
             // verify that the subject certificate has been properly signed by the issuer
             CertificateUtilFactory.getInstance().getVerifier().verifyCertificateChain(LOG::debug, chain);
         } catch (SignatureException ex) {
-            certCheckResult = CERT_INVALIDSIGNATURE;
+            certCheckResult.set(CERT_INVALIDSIGNATURE);
             StackTrace.processStackTrace(LOG::warn, StackTrace.DEFAULT_EXCLUDES, "Certificate Expired on Server Certificate Verification: ", 3);
             throw new CertificateException("Invalid Signature Error on Server Certificate Verification!");
         } catch (CertificateExpiredException ex) {
-            certCheckResult = CERT_CERTEXPIRED;
+            certCheckResult.set(CERT_CERTEXPIRED);
             StackTrace.processStackTrace(LOG::warn, StackTrace.DEFAULT_EXCLUDES, "Certificate Expired on Server Certificate Verification: ", 3);
             throw new CertificateException("Certificate Expired on Server Certificate Verification!");
         } catch (CertificateNotYetValidException ex) {
-            certCheckResult = CERT_CERTEXPIRED;
+            certCheckResult.set(CERT_CERTEXPIRED);
             StackTrace.processStackTrace(LOG::warn, StackTrace.DEFAULT_EXCLUDES, "Certificate Expired on Server Certificate Verification: ", 3);
             throw new CertificateException("Certificate Expired on Server Certificate Verification!");
         } catch (Exception ex) {
-            certCheckResult = CERT_CHECKFAILED;
+            certCheckResult.set(CERT_CHECKFAILED);
             StackTrace.processStackTrace(LOG::warn, StackTrace.DEFAULT_EXCLUDES, "Fatal Error on Server Certificate Verification: ", 3);
             throw new CertificateException("Fatal Error on Server Certificate Verification!", ex);
         }

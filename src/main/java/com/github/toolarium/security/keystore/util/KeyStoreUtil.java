@@ -252,10 +252,12 @@ public final class KeyStoreUtil {
         }
         
         KeyStore ks = null;
+        boolean alreadyLoaded = false;
         if (new File(fileName).exists()) {
             try {
                 LOG.info("Read existing keystore [" + fileName + "].");
                 ks = readPKCS12KeyStore(fileName, provider, password);
+                alreadyLoaded = (ks != null);
             } catch (IOException | GeneralSecurityException e) {
                 LOG.warn("Could not read existing keystore [" + fileName + "]: " + e.getMessage() + ". Creating new keystore.");
             }
@@ -280,9 +282,12 @@ public final class KeyStoreUtil {
             LOG.info("Overwriting existing keystore [" + fileName + "].");
         }
 
+        final boolean initRequired = !alreadyLoaded;
         final KeyStore finalKs = ks;
         withSecret(password, chars -> {
-            finalKs.load(null, chars);
+            if (initRequired) {
+                finalKs.load(null, chars);
+            }
             finalKs.setKeyEntry(alias, privateKey, chars, certificates);
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Write keystore [" + fileName + "].");
@@ -420,7 +425,7 @@ public final class KeyStoreUtil {
         return addCertificateToTrustKeystore(alias, new X509Certificate[] {certificate});
     }
 
-    
+
     /**
      * Add a certificate chain to the default trust keystore
      *
@@ -449,19 +454,19 @@ public final class KeyStoreUtil {
      * @throws GeneralSecurityException In case of general security exception
      * @throws IOException In case of not accessable trust keystore
      */
-    public KeyStore addCertificateToKeystore(KeyStore keyStore, String inputAlias, X509Certificate[] certificateChain) throws GeneralSecurityException, IOException {
+    public synchronized KeyStore addCertificateToKeystore(KeyStore keyStore, String inputAlias, X509Certificate[] certificateChain) throws GeneralSecurityException, IOException {
         if (keyStore != null && certificateChain != null) {
             String alias = inputAlias;
             if (alias == null) {
                 alias = "";
             }
-            
+
             // get certificate
             if (keyStore != null && certificateChain != null) {
                 List<X509Certificate> list = new ArrayList<X509Certificate>();
                 list.addAll(CertificateUtilFactory.getInstance().getFilter().filterValid(Arrays.asList(certificateChain)));
                 list.addAll(CertificateUtilFactory.getInstance().getFilter().filterNotYedValid(Arrays.asList(certificateChain)));
-            
+
                 for (int i = 0; i < list.size(); i++) {
                     // add the key manager store in the store
                     keyStore.setCertificateEntry(alias + i, list.get(i));
@@ -471,7 +476,7 @@ public final class KeyStoreUtil {
                 }
             }
         }
-        
+
         return keyStore;
     }
 

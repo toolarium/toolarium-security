@@ -8,6 +8,8 @@ package com.github.toolarium.security.checkdigit;
 /**
  * Defines the modulo digest api.
  * 
+ * @param <T> the type of the calculated check digit
+ * 
  * @author patrick
  */
 public interface IModulo<T> {

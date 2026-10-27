@@ -33,6 +33,14 @@ public class CertificateStoreTest {
     
     
     /**
+     * Constructor for CertificateStoreTest
+     */
+    public CertificateStoreTest() {
+        // NOP
+    }
+
+
+    /**
      * Read pkcs12 file store
      *
      * @throws GeneralSecurityException In case of an error

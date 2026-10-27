@@ -34,6 +34,14 @@ public class ChallengeResponseUtilTest {
 
 
     /**
+     * Constructor for ChallengeResponseUtilTest
+     */
+    public ChallengeResponseUtilTest() {
+        // NOP
+    }
+
+
+    /**
      * Test getChallenge.
      *
      * @throws GeneralSecurityException occurs, if the test contains errors.

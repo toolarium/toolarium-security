@@ -5,15 +5,12 @@
  */
 package com.github.toolarium.security.pki.impl;
 
-import com.github.toolarium.common.ByteArray;
 import com.github.toolarium.security.pki.IKeyConverter;
-import com.github.toolarium.security.pki.util.PKIUtil;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.PublicKey;
 import java.security.spec.X509EncodedKeySpec;
-import java.util.Base64;
 
 
 /**
@@ -62,13 +59,7 @@ public class ECKeyConverter extends AbstractKeyConverter {
             return null;
         }
         
-        @SuppressWarnings("resource")
-        ByteArray t = new ByteArray(content).replace(new ByteArray(PUBLIC_EC_KEY_START), new ByteArray());
-        t = t.replace(new ByteArray(PUBLIC_EC_KEY_END), new ByteArray());
-        t = t.replace(new ByteArray("\r"), new ByteArray());
-        t = t.replace(new ByteArray(NL), new ByteArray());
-
-        X509EncodedKeySpec spec = new X509EncodedKeySpec(Base64.getDecoder().decode(t.toBytes()));
+        X509EncodedKeySpec spec = new X509EncodedKeySpec(decodePublicKeyPem(content, PUBLIC_EC_KEY_START, PUBLIC_EC_KEY_END));
         KeyFactory kf = KeyFactory.getInstance(getType());
         return kf.generatePublic(spec);
     }
@@ -102,7 +93,7 @@ public class ECKeyConverter extends AbstractKeyConverter {
      */
     @Override
     public String formatPublicKey(PublicKey publicKey) {
-        return PKIUtil.getInstance().formatBuffer(new ByteArray(Base64.getEncoder().encode(publicKey.getEncoded())), 64, PUBLIC_EC_KEY_START, PUBLIC_EC_KEY_END).toString();
+        return formatPublicKeyPem(publicKey, PUBLIC_EC_KEY_START, PUBLIC_EC_KEY_END);
     }
 
 
@@ -111,7 +102,7 @@ public class ECKeyConverter extends AbstractKeyConverter {
      */
     @Override
     public String formatPKCS8(String content) {
-        return PKIUtil.getInstance().formatBuffer(content, 64, PRIVATE_EC_KEY_START, PRIVATE_EC_KEY_END);
+        return formatPrivateKeyPem(content, PRIVATE_EC_KEY_START, PRIVATE_EC_KEY_END);
     }
 
 
@@ -120,6 +111,6 @@ public class ECKeyConverter extends AbstractKeyConverter {
      */
     @Override
     public String normalizePKCS8(String content) {
-        return PKIUtil.getInstance().normalizeBuffer(content, PRIVATE_EC_KEY_START, PRIVATE_EC_KEY_END);
+        return normalizePrivateKeyPem(content, PRIVATE_EC_KEY_START, PRIVATE_EC_KEY_END);
     }
 }

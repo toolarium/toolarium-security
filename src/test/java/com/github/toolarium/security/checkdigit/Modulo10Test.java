@@ -20,6 +20,14 @@ import org.junit.jupiter.api.Test;
 public class Modulo10Test {
     
     /**
+     * Constructor for Modulo10Test
+     */
+    public Modulo10Test() {
+        // NOP
+    }
+
+
+    /**
      * Test modulo 10
      */
     @Test

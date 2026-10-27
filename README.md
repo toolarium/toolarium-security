@@ -1,5 +1,5 @@
 [![License](https://img.shields.io/github/license/toolarium/toolarium-security)](https://github.com/toolarium/toolarium-security/blob/master/LICENSE)
-[![Maven Central](https://img.shields.io/maven-central/v/com.github.toolarium/toolarium-security/1.1.7)](https://search.maven.org/artifact/com.github.toolarium/toolarium-security/1.1.7/jar)
+[![Maven Central](https://img.shields.io/maven-central/v/com.github.toolarium/toolarium-security/1.2.0)](https://search.maven.org/artifact/com.github.toolarium/toolarium-security/1.2.0/jar)
 [![javadoc](https://javadoc.io/badge2/com.github.toolarium/toolarium-security/javadoc.svg)](https://javadoc.io/doc/com.github.toolarium/toolarium-security)
 
 # toolarium-security
@@ -24,7 +24,7 @@ We use [SemVer](http://semver.org/) for versioning. For the versions available, 
 
 ```groovy
 dependencies {
-    implementation "com.github.toolarium:toolarium-security:1.1.7"
+    implementation "com.github.toolarium:toolarium-security:1.2.0"
 }
 ```
 
@@ -34,7 +34,7 @@ dependencies {
 <dependency>
     <groupId>com.github.toolarium</groupId>
     <artifactId>toolarium-security</artifactId>
-    <version>1.1.7</version>
+    <version>1.2.0</version>
 </dependency>
 ```
 
@@ -64,7 +64,7 @@ long[] decoded = hashId.decode(encoded);       // [1, 2, 3]
 #### Generate a self-signed certificate
 ```java
 CertificateStore certificateStore = CertificateUtilFactory.getInstance().getGenerator()
-    .createCreateCertificate("MyCertificate");   // RSA-2048, valid 3 years, localhost SAN
+    .createCreateCertificate("MyCertificate");   // RSA-2048, valid 3 years, localhost SAN, end-entity (no CA)
 
 // or with full control
 CertificateStore certificateStore = CertificateUtilFactory.getInstance().getGenerator()
@@ -72,7 +72,8 @@ CertificateStore certificateStore = CertificateUtilFactory.getInstance().getGene
         PKIUtil.getInstance().generateKeyPair("RSA", 2048),
         "CN=MyCertificate", "localhost", new Date(), 2 * 365);
 
-// persist — passwords are always char[], zeroed by the library after use
+// persist: passwords are always char[], zeroed by the library after use.
+// Files are created with owner-only permissions on POSIX systems.
 char[] password = "changeit".toCharArray();
 certificateStore.write("keystore.p12", "myalias", password);
 certificateStore.writeCertificate("certificate.crt");
@@ -80,14 +81,41 @@ certificateStore.writePublicKey("public.pub");
 certificateStore.writePrivateKey("private.pem");
 ```
 
+#### Create a CA and sign certificates
+```java
+ICertificateGenerator generator = CertificateUtilFactory.getInstance().getGenerator();
+
+// root CA (new RSA-2048 key pair)
+CertificateStore rootCa = generator.createCACertificate("My Root CA", 10 * 365);
+
+// intermediate CA signed by the root CA
+CertificateStore intermediateCa = generator.createCACertificate(
+    PKIUtil.getInstance().generateKeyPair("RSA", 2048), rootCa, "My Intermediate CA", new Date(), 5 * 365);
+
+// server certificate with its own key pair, signed by the intermediate CA
+CertificateStore server = generator.createCreateCertificate(
+    PKIUtil.getInstance().generateKeyPair("RSA", 2048), intermediateCa,
+    "server.example.com", "server.example.com", new Date(), 365);
+```
+A CA certificate has no host name and can not be used as server certificate.
+
 #### Verify a certificate chain
 ```java
-CertificateVerifier verifier = (CertificateVerifier) CertificateUtilFactory.getInstance().getVerifier();
+CertificateVerifier verifier = CertificateUtilFactory.getInstance().createVerifier(/*revocationEnabled*/false);
 
-// opt-in: enable CRL/OCSP revocation checking (disabled by default)
+// optional: only accept chains which end in one of these root certificates
+verifier.setTrustedCertificates(trustKeyStore);   // or a Collection<X509Certificate>
+
+// optional: enable CRL/OCSP revocation checking (disabled by default)
 verifier.setRevocationEnabled(true);
+verifier.setRevocationStrict(true);   // reject if the revocation status can not be determined
+
 verifier.verifyCertificateChain(LOG::debug, certificateChain);
 ```
+By default the chain validation is strict: expired or not yet valid certificates and issuers which are no CA are rejected.
+Without trusted certificates the root certificate is only verified with its own signature.
+`setStrictChainValidation(false)` verifies the signatures only.
+`getVerifier()` and `createVerifier(...)` return a new verifier on every call.
 
 #### Convert PEM / DER strings to key and certificate objects
 ```java
@@ -99,6 +127,9 @@ PrivateKey priv = KeyConverterFactory.getInstance().getConverter("RSA").getPriva
 PublicKey  pub  = KeyConverterFactory.getInstance().getConverter("RSA").getPublicKey(pemString);
 String pemPriv  = KeyConverterFactory.getInstance().getConverter("EC").formatPrivateKey(keyPair.getPrivate());
 ```
+Keys are written with the standard PEM headers `-----BEGIN PRIVATE KEY-----` and `-----BEGIN PUBLIC KEY-----`.
+Reading accepts the standard headers, the old type specific headers (e.g. `-----BEGIN RSA PRIVATE KEY-----`) and RSA keys in PKCS#1 format.
+Version 1.1.8 and older can only read the old headers; see [System properties](#system-properties).
 
 #### Create a self-signed certificate and use it for a service and client
 ```java
@@ -108,15 +139,28 @@ String pemPriv  = KeyConverterFactory.getInstance().getConverter("EC").formatPri
 ISecurityManagerProvider securityManagerProvider = SecurityManagerProviderFactory.getInstance()
     .getSecurityManagerProvider("myalias", "changeit".toCharArray());
 
-// 2. SSL server — the self-signed certificate is presented to connecting clients
+// 2. SSL server: the self-signed certificate is presented to connecting clients
 SSLContext serverCtx = SSLContextFactory.getInstance().createSslContext(securityManagerProvider);
 SSLServerSocket serverSocket = SSLUtil.getInstance()
     .getSSLServerSocket(serverCtx, port, /*needClientAuth*/false, LOG::debug);
 
-// 3. SSL client — the self-signed certificate is already in the trust store,
+// 3. SSL client: the self-signed certificate is already in the trust store,
 //    so the client accepts connections to the same server without a CA
 SSLContext clientCtx = SSLContextFactory.getInstance().createSslContext(securityManagerProvider);
 ```
+
+#### Trust manager with explicitly trusted certificates
+```java
+ToolariumTrustManager trustManager = new ToolariumTrustManager("server.example.com");
+trustManager.addTrustedCertificate(caCertificate);
+trustManager.addTrustedCertificate(serverCertificate);
+
+// optional: CRL/OCSP revocation checking (disabled by default)
+trustManager.setRevocationEnabled(true);
+```
+The host name is checked against the subject alternative names first (wildcards like `*.example.com` are supported).
+Without a host name the host name check is skipped and a warning is logged.
+While the verification is switched off (`setVerifyCertificate(false)`) every certificate is accepted, but none is added to the trusted certificates.
 
 #### Analyze a certificate chain
 ```java
@@ -141,7 +185,12 @@ KeyStoreUtil.getInstance().writePKCS12KeyStore(
 CertificateStore certificateStore = KeyStoreUtil.getInstance()
     .readPKCS12KeyPair("keystore.p12", null, "myalias", password);
 KeyPair keyPair = certificateStore.getKeyPair();
+
+// add a certificate to a copy of the default trust keystore (the shared one is not changed)
+KeyStore trustStore = KeyStoreUtil.getInstance().addCertificateToTrustKeystore("myalias", certificate);
 ```
+An existing keystore which can not be read (e.g. wrong password) is not overwritten.
+Keystores are written atomically and are only readable by the owner on POSIX systems.
 
 
 ### SSL/TLS
@@ -149,7 +198,8 @@ KeyPair keyPair = certificateStore.getKeyPair();
 #### Create a self-signed SSL context (development / testing)
 ```java
 // Uses SecurityManagerProviderFactory.DEFAULT_ALIAS ("toolarium")
-// and SecurityManagerProviderFactory.DEFAULT_PASSWORD ("changit") — for dev/test only
+// and SecurityManagerProviderFactory.DEFAULT_PASSWORD ("changit"), for dev/test only.
+// Each call creates a new key pair and certificate: create the provider once and reuse it.
 ISecurityManagerProvider provider = SecurityManagerProviderFactory.getInstance()
     .getSecurityManagerProvider();
 ```
@@ -170,23 +220,20 @@ SSLContext sslContext = SSLContextFactory.getInstance().createSslContext(provide
 
 #### Restrict cipher suites
 ```java
-// Specify an explicit allow-list; unsupported suites are logged and skipped
+// Specify an explicit allow-list; unsupported suites are logged and skipped.
+// Every engine and socket created from the context only enables these suites.
 SSLContext ctx = SSLContextFactory.getInstance().createSslContext(provider,
     "TLS_AES_128_GCM_SHA256",
     "TLS_AES_256_GCM_SHA384",
     "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384");
 
-// Apply the same restriction to every engine / socket created from the context
-SSLEngine engine = ctx.createSSLEngine(host, port);
-SSLContextFactory.getInstance().applyCipherSuites(engine,
-    "TLS_AES_128_GCM_SHA256",
-    "TLS_AES_256_GCM_SHA384");
-
 // Or use the built-in recommended allowlist (TLS 1.3 + TLS 1.2, forward secrecy, AES-GCM/ChaCha20)
 SSLContext ctx = SSLContextFactory.getInstance().createSslContext(provider,
-    SSLContextFactory.RECOMMENDED_CIPHER_SUITES);
+    SSLContextFactory.getInstance().getRecommendedCipherSuites());
+
+// Restrict an engine created elsewhere
 SSLContextFactory.getInstance().applyCipherSuites(engine,
-    SSLContextFactory.RECOMMENDED_CIPHER_SUITES);
+    SSLContextFactory.getInstance().getRecommendedCipherSuites());
 ```
 
 #### Load an SSL context from existing keystore files
@@ -212,7 +259,7 @@ boolean ok = SignatureUtil.getInstance()
     .verify(null, "SHA256withRSA", keyPair.getPublic(), data, signature);
 ```
 
-#### Sign JSON requests (Alipay-style — https://global.alipay.com/docs/ac/gr/signature)
+#### Sign JSON requests (Alipay-style, see https://global.alipay.com/docs/ac/gr/signature)
 ```java
 Security.addProvider(new BouncyCastleProvider());
 
@@ -256,7 +303,9 @@ boolean ok = ChallengeResponseUtil.getInstance()
 ```java
 boolean strongEncryption = CryptUtil.getInstance().isStrongEncryptionEnabled();
 
-SecretKeySpec key = CryptUtil.getInstance().createSecretKeySpec("my-secret-passphrase");
+// derive an AES key with an own random salt (at least 16 bytes); store the salt with the encrypted data
+byte[] salt       = CryptUtil.getInstance().generateSalt();
+SecretKeySpec key = CryptUtil.getInstance().createSecretKeySpec("my-secret-passphrase".toCharArray(), salt, 100_000);
 Cipher cipher     = CryptUtil.getInstance().getCipher("AES/GCM/NoPadding");
 ```
 
@@ -273,12 +322,20 @@ boolean valid11 = Modulo11.getInstance().validate("123456782");
 ```
 
 
+## System properties
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `toolarium.security.legacyPemHeaders` | `false` | `true` writes the PEM headers of version 1.1.8 and older (e.g. `-----BEGIN RSA PRIVATE KEY-----`) instead of the standard headers. |
+| `toolarium.security.trustManagerAlgorithm` | JVM default (`PKIX`) | Algorithm of the trust managers, e.g. `SunX509` for the behaviour of version 1.1.8 and older. |
+
+
 ## Test the security environment
 
 Verify that strong encryption is enabled and `SecureRandom` is working correctly:
 
 ```
-java -cp build/libs/toolarium-security-1.1.7.jar com.github.toolarium.security.test.JavaSecurityTester
+java -cp build/libs/toolarium-security-1.2.0.jar com.github.toolarium.security.test.JavaSecurityTester
 ```
 
 #### Output on Windows

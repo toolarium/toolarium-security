@@ -49,6 +49,14 @@ public class KeyStoreUtilTest {
     
     
     /**
+     * Constructor for KeyStoreUtilTest
+     */
+    public KeyStoreUtilTest() {
+        // NOP
+    }
+
+
+    /**
      * Test
      * 
      * @throws Exception in case of error

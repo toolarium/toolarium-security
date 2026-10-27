@@ -33,14 +33,14 @@ public class DEROutputStream extends ByteArrayOutputStream implements DEREncoder
      *  Lexicographical order comparison on byte arrays, for ordering
      *  elements of a SET OF objects in DER encoding.
      */
-    private static ByteArrayLexOrder lexOrder = new ByteArrayLexOrder();
+    private static final ByteArrayLexOrder LEX_ORDER = new ByteArrayLexOrder();
 
     
     /**
      *  Tag order comparison on byte arrays, for ordering elements of 
      *  SET objects in DER encoding.
      */
-    private static ByteArrayTagOrder tagOrder = new ByteArrayTagOrder();
+    private static final ByteArrayTagOrder TAG_ORDER = new ByteArrayTagOrder();
 
     
     /**
@@ -286,7 +286,7 @@ public class DEROutputStream extends ByteArrayOutputStream implements DEREncoder
      * @exception IOException in case of error 
      */
     public void putOrderedSetOf(byte tag, DEREncoder[] set) throws IOException {
-        putOrderedSet(tag, set, lexOrder);
+        putOrderedSet(tag, set, LEX_ORDER);
     }
 
     
@@ -301,7 +301,7 @@ public class DEROutputStream extends ByteArrayOutputStream implements DEREncoder
      * @exception IOException in case of error 
      */
     public void putOrderedSet(byte tag, DEREncoder[] set) throws IOException {
-        putOrderedSet(tag, set, tagOrder);
+        putOrderedSet(tag, set, TAG_ORDER);
     }
     
     

@@ -30,6 +30,14 @@ public class HashIdTest {
 
 
     /**
+     * Constructor for HashIdTest
+     */
+    public HashIdTest() {
+        // NOP
+    }
+
+
+    /**
      * Test default salt
      */
     @Test

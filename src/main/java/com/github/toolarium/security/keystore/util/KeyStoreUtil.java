@@ -17,6 +17,10 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.KeyStore;
@@ -25,6 +29,7 @@ import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
@@ -254,13 +259,16 @@ public final class KeyStoreUtil {
         KeyStore ks = null;
         boolean alreadyLoaded = false;
         if (new File(fileName).exists()) {
+            // an existing keystore which can not be read (e.g. wrong password) is not overwritten, otherwise its keys are lost
+            LOG.info("Read existing keystore [" + fileName + "].");
             try {
-                LOG.info("Read existing keystore [" + fileName + "].");
                 ks = readPKCS12KeyStore(fileName, provider, password);
-                alreadyLoaded = (ks != null);
-            } catch (IOException | GeneralSecurityException e) {
-                LOG.warn("Could not read existing keystore [" + fileName + "]: " + e.getMessage() + ". Creating new keystore.");
+            } catch (IOException e) {
+                throw new IOException("Could not read existing keystore [" + fileName + "], it is not overwritten: " + e.getMessage(), e);
+            } catch (GeneralSecurityException e) {
+                throw new GeneralSecurityException("Could not read existing keystore [" + fileName + "], it is not overwritten: " + e.getMessage(), e);
             }
+            alreadyLoaded = (ks != null);
         }
 
         if (ks == null) {
@@ -292,12 +300,50 @@ public final class KeyStoreUtil {
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Write keystore [" + fileName + "].");
             }
-            try (OutputStream out = new BufferedOutputStream(new FileOutputStream(new File(fileName)))) {
-                finalKs.store(out, chars);
-                out.flush();
-            }
+            writeKeyStoreFile(finalKs, fileName, chars);
         });
         return ks;
+    }
+
+
+    /**
+     * Write a key store atomically: it is written into a temporary file in the same directory, which is moved
+     * to the target file afterwards. A crash while writing does not leave a broken key store. On POSIX file
+     * systems the file can only be read and written by the owner.
+     *
+     * @param keyStore the key store
+     * @param fileName the file name
+     * @param password the password
+     * @throws GeneralSecurityException in case of error
+     * @throws IOException in case of error
+     */
+    private void writeKeyStoreFile(KeyStore keyStore, String fileName, char[] password) throws GeneralSecurityException, IOException {
+        Path target = new File(fileName).getAbsoluteFile().toPath();
+        Path directory = target.getParent();
+        if (directory != null) {
+            Files.createDirectories(directory);
+        }
+
+        // a temporary file is only readable and writable by the owner on POSIX file systems
+        Path tempFile = Files.createTempFile(directory, target.getFileName().toString(), ".tmp");
+        boolean moved = false;
+        try {
+            try (OutputStream out = new BufferedOutputStream(Files.newOutputStream(tempFile))) {
+                keyStore.store(out, password);
+                out.flush();
+            }
+
+            try {
+                Files.move(tempFile, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(tempFile, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+            moved = true;
+        } finally {
+            if (!moved) {
+                Files.deleteIfExists(tempFile);
+            }
+        }
     }
 
 
@@ -413,34 +459,68 @@ public final class KeyStoreUtil {
 
     
     /**
-     * Add a certificate to the default trust keystore
+     * Add a certificate to a copy of the default trust keystore. The shared default trust keystore is not changed,
+     * see {@link #addCertificateToTrustKeystore(String, X509Certificate[], boolean)}.
      *
      * @param alias the alias
      * @param certificate the certificate
-     * @return the keystore
+     * @return the new keystore which contains the default trusted certificates and the given certificate
      * @throws GeneralSecurityException In case of general security exception
      * @throws IOException In case of not accessable trust keystore
      */
     public KeyStore addCertificateToTrustKeystore(String alias, X509Certificate certificate) throws GeneralSecurityException, IOException {
-        return addCertificateToTrustKeystore(alias, new X509Certificate[] {certificate});
+        return addCertificateToTrustKeystore(alias, new X509Certificate[] {certificate}, false);
     }
 
 
     /**
-     * Add a certificate chain to the default trust keystore
+     * Add a certificate chain to a copy of the default trust keystore. The shared default trust keystore is not changed,
+     * see {@link #addCertificateToTrustKeystore(String, X509Certificate[], boolean)}.
      *
      * @param alias the alias
      * @param certificateChain the certificate chain
-     * @return the keystore
+     * @return the new keystore which contains the default trusted certificates and the given certificate chain
      * @throws GeneralSecurityException In case of general security exception
      * @throws IOException In case of not accessable trust keystore
      */
     public KeyStore addCertificateToTrustKeystore(String alias, X509Certificate[] certificateChain) throws GeneralSecurityException, IOException {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("Add self-signed certificate to trust store with alias " + alias + "...");
+        return addCertificateToTrustKeystore(alias, certificateChain, false);
+    }
+
+
+    /**
+     * Add a certificate chain to the default trust keystore.
+     *
+     * <p>If <code>global</code> is false, the certificates are added to a copy of the default trust keystore: only the caller
+     * which uses the returned keystore trusts them.</p>
+     *
+     * <p>If <code>global</code> is true, the certificates are added to the shared default trust keystore: every later user of
+     * {@link #getDefaultTrustKeyStore()} in this JVM trusts them. Use this only on purpose. The shared keystore is replaced
+     * (copy on write), so readers never see a keystore which is modified concurrently. Keystores which were returned before
+     * are not changed. The JDK default <code>SSLContext</code> is not changed.</p>
+     *
+     * @param alias the alias
+     * @param certificateChain the certificate chain
+     * @param global true to add the certificates to the shared default trust keystore (JVM wide)
+     * @return the keystore which contains the default trusted certificates and the given certificate chain
+     * @throws GeneralSecurityException In case of general security exception
+     * @throws IOException In case of not accessable trust keystore
+     */
+    public KeyStore addCertificateToTrustKeystore(String alias, X509Certificate[] certificateChain, boolean global) throws GeneralSecurityException, IOException {
+        if (!global) {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Add certificate to a copy of the default trust store with alias " + alias + "...");
+            }
+
+            return addCertificateToKeystore(copyTrustKeyStore(getDefaultTrustKeyStore()), alias, certificateChain);
         }
-        
-        return addCertificateToKeystore(getDefaultTrustKeyStore(), alias, certificateChain);
+
+        synchronized (this) {
+            LOG.info("Add certificate to the shared default trust store with alias " + alias + " (JVM wide).");
+            KeyStore trustKeyStore = addCertificateToKeystore(copyTrustKeyStore(getDefaultTrustKeyStore()), alias, certificateChain);
+            cachedDefaultTrustKeyStore = trustKeyStore;
+            return trustKeyStore;
+        }
     }
 
     
@@ -480,7 +560,29 @@ public final class KeyStoreUtil {
         return keyStore;
     }
 
-    
+
+    /**
+     * Copy the certificate entries of a trust keystore into a new keystore. Key entries are not copied.
+     *
+     * @param source the trust keystore to copy
+     * @return the new keystore
+     * @throws GeneralSecurityException In case of general security exception
+     * @throws IOException In case of an I/O error
+     */
+    private KeyStore copyTrustKeyStore(KeyStore source) throws GeneralSecurityException, IOException {
+        KeyStore copy = createKeyStore(null);
+        for (String alias : Collections.list(source.aliases())) {
+            if (source.isCertificateEntry(alias)) {
+                copy.setCertificateEntry(alias, source.getCertificate(alias));
+            }
+        }
+        return copy;
+    }
+
+
+    /**
+     * Action which receives a temporary copy of a secret.
+     */
     @FunctionalInterface
     private interface SecretAction {
         /**

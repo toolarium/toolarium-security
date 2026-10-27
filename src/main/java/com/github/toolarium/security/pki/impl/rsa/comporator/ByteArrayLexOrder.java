@@ -16,6 +16,14 @@ import java.util.Comparator;
 public class ByteArrayLexOrder implements Comparator<byte[]> {
     
     /**
+     * Constructor for ByteArrayLexOrder
+     */
+    public ByteArrayLexOrder() {
+        // NOP
+    }
+
+
+    /**
      * Perform lexicographical comparison of two byte arrays, regarding each byte as unsigned.  That is, compare array entries 
      * in order until they differ--the array with the smaller entry is "smaller". If array entries are 
      * equal till one array ends, then the longer array is "bigger".

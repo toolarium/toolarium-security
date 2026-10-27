@@ -44,7 +44,27 @@ public class DERInputBuffer extends ByteArrayInputStream implements Cloneable {
 
     
     /**
-     * Duplicate 
+     * Get the current read position
+     *
+     * @return the read position
+     */
+    int getPosition() {
+        return pos;
+    }
+
+
+    /**
+     * Get the marked position, which {@link #reset()} returns to
+     *
+     * @return the marked position
+     */
+    int getMarkPosition() {
+        return mark;
+    }
+
+
+    /**
+     * Duplicate
      *
      * @return the buffer
      * @throws IllegalArgumentException In case of invalid argument
@@ -172,6 +192,10 @@ public class DERInputBuffer extends ByteArrayInputStream implements Cloneable {
      */
     public BigInt getUnsigned(int l) throws IOException {
         int len = l;
+        if (len <= 0) {
+            throw new IOException("invalid length of integer/enumerated: " + len);
+        }
+
         if (len > available()) {
             throw new IOException("short read of integer/enumerated");
         }

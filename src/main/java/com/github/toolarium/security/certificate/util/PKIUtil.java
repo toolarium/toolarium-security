@@ -39,22 +39,22 @@ public final class PKIUtil {
     public static final String PUBLIC_CERTIFICATE_END = CertificateConverter.PUBLIC_CERTIFICATE_END;
 
     /** the public RSA key start */
-    public static final String PUBLIC_RSA_KEY_START = RSAKeyConverter.PRIVATE_RSA_KEY_START;
+    public static final String PUBLIC_RSA_KEY_START = RSAKeyConverter.PUBLIC_RSA_KEY_START;
 
     /** the public RSA key end */
-    public static final String PUBLIC_RSA_KEY_END = RSAKeyConverter.PRIVATE_RSA_KEY_END;
+    public static final String PUBLIC_RSA_KEY_END = RSAKeyConverter.PUBLIC_RSA_KEY_END;
 
     /** the public DSA key start */
-    public static final String PUBLIC_DSA_KEY_START = DSAKeyConverter.PRIVATE_DSA_KEY_START;
+    public static final String PUBLIC_DSA_KEY_START = DSAKeyConverter.PUBLIC_DSA_KEY_START;
 
     /** the public DSA key end */
-    public static final String PUBLIC_DSA_KEY_END = DSAKeyConverter.PRIVATE_DSA_KEY_END;
+    public static final String PUBLIC_DSA_KEY_END = DSAKeyConverter.PUBLIC_DSA_KEY_END;
 
     /** the public EC key start */
-    public static final String PUBLIC_EC_KEY_START = ECKeyConverter.PRIVATE_EC_KEY_START;
+    public static final String PUBLIC_EC_KEY_START = ECKeyConverter.PUBLIC_EC_KEY_START;
 
     /** the public EC key end */
-    public static final String PUBLIC_EC_KEY_END = ECKeyConverter.PRIVATE_EC_KEY_END;
+    public static final String PUBLIC_EC_KEY_END = ECKeyConverter.PUBLIC_EC_KEY_END;
 
     /** the private RSA key certificate start */
     public static final String PRIVATE_RSA_KEY_START = RSAKeyConverter.PRIVATE_RSA_KEY_START;

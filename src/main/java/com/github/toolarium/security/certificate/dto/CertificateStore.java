@@ -17,6 +17,7 @@ import java.io.Serializable;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.KeyStore;
@@ -24,6 +25,7 @@ import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.cert.X509Certificate;
 import java.util.EnumSet;
+import java.util.Set;
 
 
 /**
@@ -220,16 +222,25 @@ public class CertificateStore implements Serializable {
      */
     private void write(String inputFileName, String content) throws IOException { // CHECKSTYLE IGNORE THIS LINE
         String fileName = inputFileName;
-        try (FileWriter writer = new FileWriter(new File(fileName))) {
+        File file = new File(fileName);
+        boolean isPosix = FileSystems.getDefault().supportedFileAttributeViews().contains("posix");
+        if (isPosix) {
+            // restrict the file permissions to owner-only before the content is written, so it is never readable by others
+            Set<PosixFilePermission> ownerOnly = EnumSet.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE);
+            if (file.exists()) {
+                Files.setPosixFilePermissions(file.toPath(), ownerOnly);
+            } else {
+                Files.createFile(file.toPath(), PosixFilePermissions.asFileAttribute(ownerOnly));
+            }
+        }
+
+        try (FileWriter writer = new FileWriter(file)) {
             writer.append(content);
             writer.flush();
         }
 
-        // restrict file permissions to owner-only where supported
-        File file = new File(fileName);
-        if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
-            Files.setPosixFilePermissions(file.toPath(), EnumSet.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
-        } else {
+        if (!isPosix) {
+            // restrict file permissions to owner-only where supported
             file.setReadable(false, false);
             file.setReadable(true, true);
             file.setWritable(false, false);

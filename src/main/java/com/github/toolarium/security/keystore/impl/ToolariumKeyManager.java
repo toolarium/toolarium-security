@@ -63,7 +63,9 @@ public class ToolariumKeyManager implements javax.net.ssl.X509KeyManager {
         }
         
         X509Certificate[] certs =  x509KeyManager.getCertificateChain(alias);
-        PKIUtil.getInstance().processCertificate(LOG::info, alias, certs);
+        if (LOG.isDebugEnabled()) {
+            PKIUtil.getInstance().processCertificate(LOG::debug, alias, certs);
+        }
         return certs;
     }
     

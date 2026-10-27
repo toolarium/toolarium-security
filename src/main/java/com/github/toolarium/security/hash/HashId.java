@@ -165,14 +165,26 @@ public final class HashId {
 
     
     /**
-     * Encrypt
-     * 
+     * Encrypt (obfuscate) the given numbers into a hash id. This is a reversible obfuscation, not an encryption:
+     * it must not be used to protect confidential data.
+     *
+     * <p>The sign is not encoded: a negative number is encoded as its absolute value.</p>
+     *
      * @param inputNumbers some numbers
      * @return the generated hash id
+     * @throws IllegalArgumentException if the numbers are null or contain {@link Long#MIN_VALUE}, which has no absolute value
      */
     public String encrypt(long... inputNumbers) {
+        if (inputNumbers == null) {
+            throw new IllegalArgumentException("Invalid numbers (null)!");
+        }
+
         long[] numbers = new long[inputNumbers.length];
         for (int i = 0; i < numbers.length; i++) {
+            if (inputNumbers[i] == Long.MIN_VALUE) {
+                throw new IllegalArgumentException("Long.MIN_VALUE can not be encoded!");
+            }
+
             if (inputNumbers[i] < 0) {
                 numbers[i] = -1 * inputNumbers[i];
             } else {
@@ -188,10 +200,17 @@ public final class HashId {
      * Decrypt
      * 
      * @param hash the hash to decrypt
-     * @return the decrypted hash
+     * @return the decrypted hash or an empty array if the hash is invalid
      */
     public long[] decrypt(String hash) {
-        long[] inputNumbers = decode(hash);
+        long[] inputNumbers;
+        try {
+            inputNumbers = decode(hash);
+        } catch (RuntimeException e) {
+            // malformed input (e.g. only guard characters): treat as invalid hash
+            return new long[0];
+        }
+
         long[] numbers = new long[inputNumbers.length];
 
         for (int i = 0; i < inputNumbers.length; i++) {
@@ -240,17 +259,20 @@ public final class HashId {
             ret.append(hash(numbers[i], alphabet));
 
             if (i + 1 < numbers.length) {
-                ret.append(shuffeltSeps.charAt((int) ((numbers[i] + i) % shuffeltSeps.length())));
+                // floorMod: numbers[i] + i can overflow for numbers close to Long.MAX_VALUE
+                ret.append(shuffeltSeps.charAt((int) Math.floorMod(numbers[i] + i, (long) shuffeltSeps.length())));
             }
         }
 
         if (ret.length() < inputMinHashLength) {
+            // the sum is truncated to int (as before) to keep the generated ids stable; floorMod ensures that an
+            // overflowed (negative) sum still selects a guard, otherwise the padded id could not be decoded anymore
             int firstIndex = 0;
             for (int i = 0; i < numbers.length; i++) {
                 firstIndex += (i + 1) * numbers[i];
             }
 
-            int guardIndex = firstIndex % guards.size();
+            int guardIndex = Math.floorMod(firstIndex, guards.size());
             if (guardIndex >= 0) {
                 char guard = guards.get(guardIndex);
                 ret.insert(0, guard);
@@ -372,7 +394,8 @@ public final class HashId {
 
         for (int i = 0; i < hash.length(); i++) {
             int pos = inputAlphabet.indexOf(hash.charAt(i));
-            number += pos * (long) Math.pow(inputAlphabet.length(), hash.length() - i - 1);
+            // exact integer arithmetic (Horner scheme): Math.pow loses precision for numbers > 2^53
+            number = number * inputAlphabet.length() + pos;
         }
 
         return number;

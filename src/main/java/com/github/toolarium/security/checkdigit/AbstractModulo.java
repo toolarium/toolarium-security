@@ -12,10 +12,20 @@ import java.util.List;
 
 /**
  * Implements the base class of modulo calculation
+ *
+ * @param <T> the type of the calculated check digit
  *  
  * @author patrick
  */
 public abstract class AbstractModulo<T> implements IModulo<T> {
+
+    /**
+     * Constructor for AbstractModulo
+     */
+    protected AbstractModulo() {
+        // NOP
+    }
+
 
     /**
      * @see com.github.toolarium.security.checkdigit.IModulo#validate(java.lang.String)

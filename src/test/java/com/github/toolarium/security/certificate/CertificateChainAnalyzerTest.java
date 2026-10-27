@@ -29,6 +29,14 @@ public class CertificateChainAnalyzerTest {
 
 
     /**
+     * Constructor for CertificateChainAnalyzerTest
+     */
+    public CertificateChainAnalyzerTest() {
+        // NOP
+    }
+
+
+    /**
      * Test isSelfSigned detects a self-signed certificate
      *
      * @throws Exception in case of error

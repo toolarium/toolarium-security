@@ -41,6 +41,14 @@ public class KeyConverterTest {
 
     
     /**
+     * Constructor for KeyConverterTest
+     */
+    public KeyConverterTest() {
+        // NOP
+    }
+
+
+    /**
      * Test
      * 
      * @throws Exception in case of error

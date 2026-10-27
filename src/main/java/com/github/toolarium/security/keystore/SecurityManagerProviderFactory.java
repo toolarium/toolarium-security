@@ -72,8 +72,11 @@ public final class SecurityManagerProviderFactory {
      *
      * <p><strong>WARNING: FOR DEVELOPMENT / TESTING ONLY.</strong>
      * This convenience overload uses the hardcoded alias {@code "toolarium"} and the well-known
-     * default password {@code "changit"}. Do NOT use this in production — supply explicit credentials
+     * default password {@code "changit"}. Do NOT use this in production; supply explicit credentials
      * via {@link #getSecurityManagerProvider(String, char[])} or another overload instead.</p>
+     *
+     * <p><strong>Note:</strong> every call creates a new RSA key pair (2048 bits) and a new self-signed
+     * certificate, which takes some time. Create the provider once and reuse it.</p>
      *
      * @return the security manager provider
      * @throws GeneralSecurityException in case of error

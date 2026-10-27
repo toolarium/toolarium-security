@@ -185,9 +185,15 @@ public class DERIndefLenConverter {
             curLen = (lenByte & LEN_MASK);
         }
 
+        // reject negative (overflowed) lengths and lengths exceeding the remaining data;
+        // otherwise parseValue could move dataPos backwards and loop forever
+        if (curLen < 0 || curLen > (dataSize - dataPos)) {
+            throw new IOException("Invalid length: " + curLen);
+        }
+
         return curLen;
     }
-    
+
     /**
      * Write the length and if it is an indefinite length then calculate the definite length from the positions
      * of the indefinite length and its matching EOC terminator. Then, write the value.
@@ -326,6 +332,8 @@ public class DERIndefLenConverter {
         dataPos = 0;
         index = 0;
         dataSize = data.length;
+        ndefsList = new ArrayList<Object>();
+        numOfTotalLenBytes = 0;
         int len = 0;
 
         // parse and set up the vectors of all the indefinite-lengths
@@ -333,6 +341,13 @@ public class DERIndefLenConverter {
             parseTag();
             len = parseLength();
             parseValue(len);
+        }
+
+        // every indefinite-length must have a matching EOC
+        for (Object elem : ndefsList) {
+            if (!(elem instanceof byte[])) {
+                throw new IOException("Indefinite-length tag does not have a matching EOC");
+            }
         }
 
         newData = new byte[dataSize + numOfTotalLenBytes];

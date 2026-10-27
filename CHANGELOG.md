@@ -5,7 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [ 1.1.9 ] - 2026-10-20
+## [ 1.2.0 ] - 2026-10-27
+### Added
+- `ICertificateGenerator.createCACertificate` to create root and intermediate CA certificates. Custom implementations of `ICertificateGenerator` must add these methods.
+- `CertificateVerifier`: optional trusted root certificates (`setTrustedCertificates`), switchable strict chain validation (`setStrictChainValidation`) and strict revocation checking (`setRevocationStrict`).
+- `CertificateUtilFactory.createVerifier(boolean revocationEnabled)`.
+- `ToolariumTrustManager`: host name (`ToolariumTrustManager(String)`, `setHostname`) and revocation checking (`setRevocationEnabled`, `setRevocationStrict`).
+- `KeyStoreUtil.addCertificateToTrustKeystore(alias, certificateChain, global)` to change the shared default trust keystore on purpose.
+- `SSLContextFactory.getRecommendedCipherSuites()`.
+- `CryptUtil.generateSalt()`.
+- `RSAPrivateKeyPKCS8.destroy()` to clear the key material.
+- System property `toolarium.security.legacyPemHeaders=true` to write the PEM headers of version 1.1.8 and older.
+- System property `toolarium.security.trustManagerAlgorithm` to choose the trust manager algorithm (`SunX509` for the old behaviour).
+
+### Changed
+- Keys are written with the standard PEM headers, so other tools like OpenSSL can read them. The old headers are still read. Version 1.1.8 and older can not read the new files (see `toolarium.security.legacyPemHeaders`).
+- RSA private keys in the traditional OpenSSL format can be loaded; invalid keys are rejected when loaded.
+- Certificate chain validation is strict by default: expired certificates and issuers which are no CA are rejected (old behaviour: `setStrictChainValidation(false)`).
+- `createCreateCertificate` creates end-entity certificates; a self-signed certificate is no CA anymore. Use `createCACertificate` for a CA.
+- `CertificateUtilFactory.getVerifier()` returns a new verifier on every call.
+- `ToolariumTrustManager` keeps every trusted certificate, supports wildcard host names and does not remember certificates while the verification is off.
+- Revocation checking (off by default) works when it is enabled.
+- `SSLContextFactory.createSslContext(provider, allowedCipherSuites...)` enforces the given cipher suites.
+- The trust managers use the JVM default algorithm (old behaviour: `-Dtoolarium.security.trustManagerAlgorithm=SunX509`).
+- `KeyStoreUtil.writePKCS12KeyStore` does not overwrite an existing keystore which can not be read (e.g. wrong password).
+- `KeyStoreUtil.addCertificateToTrustKeystore(alias, ...)` no longer changes the shared default trust keystore.
+- Keystore and key files are only readable by the owner on POSIX systems.
+- `CryptUtil.createSecretKeySpec(passphrase, salt, iterations)` requires a salt of at least 16 bytes.
+- `HashId.encrypt` throws `IllegalArgumentException` for invalid input.
+- Logs of routine operations are DEBUG instead of INFO.
+
+### Deprecated
+- `SSLContextFactory.RECOMMENDED_CIPHER_SUITES`: use `getRecommendedCipherSuites()`.
+
+### Fixed
+- The deprecated `PKIUtil.PUBLIC_*_KEY_START/END` constants contained the private key headers.
+- `HashId` handles very large numbers and malformed input.
+- `PKIConfigurationUtil` loads generic PEM keys.
+- The DER parser rejects malformed input with a clear exception.
+- `CryptoHashUtil` accepts a provider name with surrounding spaces.
+- Complete Javadoc.
 
 ## [ 1.1.8 ] - 2026-10-20
 ### Changed

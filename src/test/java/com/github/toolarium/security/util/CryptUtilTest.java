@@ -27,6 +27,14 @@ public class CryptUtilTest {
 
 
     /**
+     * Constructor for CryptUtilTest
+     */
+    public CryptUtilTest() {
+        // NOP
+    }
+
+
+    /**
      * Test strong encryption check
      */
     @Test

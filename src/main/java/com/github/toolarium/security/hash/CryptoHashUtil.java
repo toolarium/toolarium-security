@@ -135,14 +135,14 @@ public final class CryptoHashUtil {
             throw new GeneralSecurityException("Invalid input data!");
         }
         
-        if (LOG.isInfoEnabled()) {
-            LOG.info("Create " + CryptUtil.getInstance().getAlgorithmMessage(provider, algorithm) + " hash (" + in.length + " bytes)...");
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Create " + CryptUtil.getInstance().getAlgorithmMessage(provider, algorithm) + " hash (" + in.length + " bytes)...");
         }
 
         MessageDigest msgDigest = null;
 
         if (provider != null && provider.trim().length() > 0) {
-            msgDigest = MessageDigest.getInstance(algorithm, provider);
+            msgDigest = MessageDigest.getInstance(algorithm, provider.trim());
         } else { 
             msgDigest = MessageDigest.getInstance(algorithm);
         }
@@ -171,13 +171,13 @@ public final class CryptoHashUtil {
         }
 
         String macAlgorithm = "HmacSHA256";
-        if (LOG.isInfoEnabled()) {
-            LOG.info("Create " + macAlgorithm + " hash (" + in.length + " bytes)...");
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Create " + macAlgorithm + " hash (" + in.length + " bytes)...");
         }
 
         Mac mac;
         if (provider != null && provider.trim().length() > 0) {
-            mac = Mac.getInstance(macAlgorithm, provider);
+            mac = Mac.getInstance(macAlgorithm, provider.trim());
         } else {
             mac = Mac.getInstance(macAlgorithm);
         }

@@ -34,6 +34,14 @@ public class SignatureUtilTest {
 
     
     /**
+     * Constructor for SignatureUtilTest
+     */
+    public SignatureUtilTest() {
+        // NOP
+    }
+
+
+    /**
      * Test
      * 
      * @throws GeneralSecurityException occurs, if the test contains errors.

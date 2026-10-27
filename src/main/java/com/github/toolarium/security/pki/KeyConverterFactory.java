@@ -119,9 +119,15 @@ public final class KeyConverterFactory {
     }
     
     
+    /**
+     * The supported key types
+     */
     public enum Types {
+        /** the RSA key type */
         RSA,
+        /** the DSA key type */
         DSA,
+        /** the EC key type */
         EC;
     }
 }

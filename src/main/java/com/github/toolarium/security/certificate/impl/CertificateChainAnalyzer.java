@@ -30,6 +30,14 @@ public class CertificateChainAnalyzer implements ICertificateChainAnalyzer {
 
     
     /**
+     * Constructor for CertificateChainAnalyzer
+     */
+    public CertificateChainAnalyzer() {
+        // NOP
+    }
+
+
+    /**
      * @see com.github.toolarium.security.certificate.ICertificateChainAnalyzer#buildChainFor(java.security.KeyPair, java.util.Collection)
      */
     @Override

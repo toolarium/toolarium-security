@@ -24,6 +24,8 @@ import org.slf4j.LoggerFactory;
  */
 public class SecurityManagerProviderImpl implements ISecurityManagerProvider {
     private static final Logger LOG = LoggerFactory.getLogger(SecurityManagerProviderImpl.class);
+    /** system property to change the trust manager algorithm, default PKIX; SunX509 restores the behaviour of version 1.1.8 and older */
+    private static final String TRUST_MANAGER_ALGORITHM_PROPERTY = "toolarium.security.trustManagerAlgorithm";
     private final transient KeyStore trustManagerStore;
     private final transient KeyStore keyManagerStore;
     private final transient ISecuredSecretValue keyManagerStorePassword;
@@ -87,6 +89,9 @@ public class SecurityManagerProviderImpl implements ISecurityManagerProvider {
     }
 
     
+    /**
+     * Action which receives a temporary copy of a secret.
+     */
     @FunctionalInterface
     private interface SecretAction {
         /**
@@ -141,9 +146,9 @@ public class SecurityManagerProviderImpl implements ISecurityManagerProvider {
     protected TrustManager[] createTrustManagers(final KeyStore keyStore) throws GeneralSecurityException {
         try {
             if (LOG.isDebugEnabled()) {
-                LOG.debug("Initialize trust manager factory by [" + keyStore + "] of type " + KeyManagerFactory.getDefaultAlgorithm() + "...");
+                LOG.debug("Initialize trust manager factory by [" + keyStore + "] of type " + System.getProperty(TRUST_MANAGER_ALGORITHM_PROPERTY, TrustManagerFactory.getDefaultAlgorithm()) + "...");
             }
-            TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+            TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(System.getProperty(TRUST_MANAGER_ALGORITHM_PROPERTY, TrustManagerFactory.getDefaultAlgorithm()));
             trustManagerFactory.init(keyStore);
             
             //ToolariumTrustManager toolariumTrustManager = new ToolariumTrustManager();

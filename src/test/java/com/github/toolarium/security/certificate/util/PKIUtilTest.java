@@ -66,6 +66,14 @@ public class PKIUtilTest {
 
     
     /**
+     * Constructor for PKIUtilTest
+     */
+    public PKIUtilTest() {
+        // NOP
+    }
+
+
+    /**
      * Test
      * 
      * @throws Exception in case of error

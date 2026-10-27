@@ -15,6 +15,7 @@ import java.security.interfaces.RSAPrivateKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.RSAPrivateCrtKeySpec;
 import java.security.spec.RSAPrivateKeySpec;
+import java.util.Arrays;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,6 +30,7 @@ public class RSAPrivateKeyPKCS8 implements RSAPrivateKey {
     private static final Logger LOG = LoggerFactory.getLogger(RSAPrivateKeyPKCS8.class);
     private RSAPrivateCrtKeySpec keyspec;
     private byte[] encoded;
+    private volatile boolean destroyed;
 
 
     /**
@@ -77,17 +79,24 @@ public class RSAPrivateKeyPKCS8 implements RSAPrivateKey {
      * @throws InvalidKeySpecException in case of error
      */
     public void checkEncoding() throws InvalidKeySpecException {
+        checkNotDestroyed();
         getEncoded();
 
         try {
             DERInputStream dis = new DERInputStream(encoded);
             DERValue[] derseq = dis.getSequence(3);
-            
+            if (derseq == null || derseq.length == 0) {
+                throw new InvalidKeySpecException("Empty DER sequence");
+            }
+
             if (!BigInteger.ZERO.equals(derseq[0].getInteger().toBigInteger())) {
                 throw new InvalidKeySpecException("Bad DER sequence");
             }
         } catch (IOException e) {
-            throw new InvalidKeySpecException(e.getMessage());
+            throw new InvalidKeySpecException(e.getMessage(), e);
+        } catch (RuntimeException e) {
+            // malformed input must not escape as an unchecked exception
+            throw new InvalidKeySpecException("Invalid DER encoding: " + e.getMessage(), e);
         }
 
         return;
@@ -99,6 +108,7 @@ public class RSAPrivateKeyPKCS8 implements RSAPrivateKey {
      */
     @Override
     public byte[] getEncoded() {
+        checkNotDestroyed();
         if (encoded != null) {
             return encoded.clone();
         }
@@ -133,6 +143,7 @@ public class RSAPrivateKeyPKCS8 implements RSAPrivateKey {
      * @return the key spec
      */
     public RSAPrivateKeySpec getKeySpec() {
+        checkNotDestroyed();
         if (keyspec == null) {
             getEncoded();
         }
@@ -146,6 +157,7 @@ public class RSAPrivateKeyPKCS8 implements RSAPrivateKey {
      */
     @Override
     public BigInteger getPrivateExponent() {
+        checkNotDestroyed();
         if (keyspec == null) {
             return null;
         }
@@ -159,11 +171,51 @@ public class RSAPrivateKeyPKCS8 implements RSAPrivateKey {
      */
     @Override
     public BigInteger getModulus() {
+        checkNotDestroyed();
         if (keyspec == null) {
             return null;
         }
 
         return getKeySpec().getModulus();
+    }
+
+
+    /**
+     * Destroy the key: the encoded key bytes are overwritten with zeros and the key specification is removed.
+     * The key can not be used anymore afterwards. The numbers of the key specification ({@link BigInteger})
+     * can not be overwritten in Java, they are only released.
+     *
+     * @see javax.security.auth.Destroyable#destroy()
+     */
+    @Override
+    public synchronized void destroy() {
+        if (encoded != null) {
+            Arrays.fill(encoded, (byte) 0);
+            encoded = null;
+        }
+        keyspec = null;
+        destroyed = true;
+    }
+
+
+    /**
+     * @see javax.security.auth.Destroyable#isDestroyed()
+     */
+    @Override
+    public boolean isDestroyed() {
+        return destroyed;
+    }
+
+
+    /**
+     * Check that the key is not destroyed
+     *
+     * @throws IllegalStateException if the key is destroyed
+     */
+    private void checkNotDestroyed() {
+        if (destroyed) {
+            throw new IllegalStateException("The private key is destroyed!");
+        }
     }
 
 

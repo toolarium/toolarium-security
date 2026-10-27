@@ -16,6 +16,14 @@ import java.util.Comparator;
 public class ByteArrayTagOrder implements Comparator<byte[]> {
     
     /**
+     * Constructor for ByteArrayTagOrder
+     */
+    public ByteArrayTagOrder() {
+        // NOP
+    }
+
+
+    /**
      * Compare two byte arrays, by the order of their tags, as defined in ITU-T X.680, sec. 6.4.  (First compare
      * tag classes, then tag numbers, ignoring the constructivity bit.)
      *

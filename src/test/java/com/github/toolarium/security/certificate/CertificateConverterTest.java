@@ -62,6 +62,14 @@ public class CertificateConverterTest {
 
     
     /**
+     * Constructor for CertificateConverterTest
+     */
+    public CertificateConverterTest() {
+        // NOP
+    }
+
+
+    /**
      * Test
      * 
      * @throws Exception in case of error

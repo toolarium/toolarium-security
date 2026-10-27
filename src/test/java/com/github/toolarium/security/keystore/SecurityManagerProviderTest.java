@@ -25,6 +25,14 @@ public class SecurityManagerProviderTest {
 
     
     /**
+     * Constructor for SecurityManagerProviderTest
+     */
+    public SecurityManagerProviderTest() {
+        // NOP
+    }
+
+
+    /**
      * Test the key store configuration
      *
      * @throws IOException in case of a file read error

@@ -161,10 +161,16 @@ public class DERValue {
     DERValue(DERInputBuffer i) throws IOException {
         // xxx must also parse BER-encoded constructed values such as sequences, sets...
         DERInputBuffer in = i;
-        
+
+        int startPosition = in.getPosition();
         tag = (byte)in.read();
         length = DERInputStream.getLength(in);
         if (length == -1) { // indefinite length encoding found
+            if (startPosition != in.getMarkPosition()) {
+                // the reset below returns to the marked position and not to the start of this element:
+                // a nested element would be read from the wrong position
+                throw new IOException("Nested indefinite length encoding not supported");
+            }
             in.reset();      // reset position to beginning of the stream
             byte[] indefData = new byte[in.available()];
             DataInputStream dis = new DataInputStream(in);

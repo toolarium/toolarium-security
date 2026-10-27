@@ -30,6 +30,14 @@ public class CryptoHashUtilTest {
 
     
     /**
+     * Constructor for CryptoHashUtilTest
+     */
+    public CryptoHashUtilTest() {
+        // NOP
+    }
+
+
+    /**
      * MD5 Test
      * 
      * @throws GeneralSecurityException in case of error

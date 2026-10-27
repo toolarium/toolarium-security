@@ -26,6 +26,8 @@ import java.util.Arrays;
 import java.util.List;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLServerSocket;
+import javax.net.ssl.SSLSocket;
 import javax.net.ssl.TrustManager;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -41,6 +43,14 @@ public class SSLContextFactoryTest {
     private static final Logger LOG = LoggerFactory.getLogger(SSLContextFactoryTest.class);
 
     
+    /**
+     * Constructor for SSLContextFactoryTest
+     */
+    public SSLContextFactoryTest() {
+        // NOP
+    }
+
+
     /**
      * Test the key store configuration. Test on command line:
      * <code>
@@ -202,18 +212,32 @@ public class SSLContextFactoryTest {
      * Test createSslContext with an explicit cipher suite allow-list
      *
      * @throws GeneralSecurityException in case of error
+     * @throws IOException in case of error
      */
     @Test
-    public void testCreateSslContextWithCipherSuites() throws GeneralSecurityException {
+    public void testCreateSslContextWithCipherSuites() throws GeneralSecurityException, IOException {
         ISecurityManagerProvider securityManagerProvider = SecurityManagerProviderFactory.getInstance()
                 .getSecurityManagerProvider(SecurityManagerProviderFactory.DEFAULT_ALIAS, SecurityManagerProviderFactory.DEFAULT_PASSWORD.toCharArray());
         assertNotNull(securityManagerProvider);
 
         // AES-GCM suites are supported by all modern JVMs
+        List<String> expected = Arrays.asList("TLS_AES_128_GCM_SHA256", "TLS_AES_256_GCM_SHA384");
         SSLContext sslContext = SSLContextFactory.getInstance().createSslContext(securityManagerProvider,
                 "TLS_AES_128_GCM_SHA256",
                 "TLS_AES_256_GCM_SHA384");
         assertNotNull(sslContext);
+
+        // the restriction is applied to everything the context creates
+        assertEquals(expected, Arrays.asList(sslContext.createSSLEngine().getEnabledCipherSuites()));
+        assertEquals(expected, Arrays.asList(sslContext.createSSLEngine("localhost", 443).getEnabledCipherSuites()));
+        assertEquals(expected, Arrays.asList(sslContext.getDefaultSSLParameters().getCipherSuites()));
+        assertEquals(expected, Arrays.asList(sslContext.getSocketFactory().getDefaultCipherSuites()));
+        try (SSLSocket socket = (SSLSocket) sslContext.getSocketFactory().createSocket()) {
+            assertEquals(expected, Arrays.asList(socket.getEnabledCipherSuites()));
+        }
+        try (SSLServerSocket serverSocket = (SSLServerSocket) sslContext.getServerSocketFactory().createServerSocket()) {
+            assertEquals(expected, Arrays.asList(serverSocket.getEnabledCipherSuites()));
+        }
     }
 
 

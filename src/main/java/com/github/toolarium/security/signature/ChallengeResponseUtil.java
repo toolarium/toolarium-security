@@ -69,8 +69,8 @@ public final class ChallengeResponseUtil {
             throw new GeneralSecurityException("Invalid size!");
         }
         
-        if (LOG.isInfoEnabled()) {
-            LOG.info("Generating challenge (" + size + " bytes)...");
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Generating challenge (" + size + " bytes)...");
         }
 
         byte[] challange = RandomGenerator.getInstance().nextBytes(size);
@@ -105,8 +105,8 @@ public final class ChallengeResponseUtil {
      * @throws GeneralSecurityException in case of error
      */
     public boolean checkResponse(String provider, String algorithm, PublicKey publicKey, byte[] challenge, byte[] response) throws GeneralSecurityException {
-        if (LOG.isInfoEnabled()) {
-            LOG.info("Checking response...");
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Checking response...");
         }
         
         if (LOG.isDebugEnabled()) {
@@ -149,8 +149,8 @@ public final class ChallengeResponseUtil {
      * @throws GeneralSecurityException in case of error
      */
     public byte[] generateResponse(String provider, String algorithm, PrivateKey privateKey, byte[] challenge) throws GeneralSecurityException {
-        if (LOG.isInfoEnabled()) {
-            LOG.info("Generate response...");
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Generate response...");
         }
 
         // check parameters

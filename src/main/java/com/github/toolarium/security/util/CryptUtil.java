@@ -9,6 +9,7 @@ import com.github.toolarium.common.security.ISecuredSecretValue;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
@@ -40,7 +41,9 @@ public final class CryptUtil {
     private static final byte[] PBKDF2_SALT = "toolarium-security-v1".getBytes(StandardCharsets.UTF_8);
     private static final int PBKDF2_ITERATIONS = 100_000;
     private static final int PBKDF2_KEY_LENGTH_BITS = 256;
-    
+    private static final int PBKDF2_MIN_SALT_LENGTH = 16;
+    private static final SecureRandom SALT_RANDOM = new SecureRandom();
+
 
     /**
      * Private class, the only instance of the singelton which will be created by accessing the holder class.
@@ -184,12 +187,25 @@ public final class CryptUtil {
 
     
     /**
+     * Generates a new random salt (16 bytes) for {@link #createSecretKeySpec(char[], byte[], int)}.
+     * The salt is not secret and should be stored alongside the ciphertext.
+     *
+     * @return a new random salt
+     */
+    public byte[] generateSalt() {
+        byte[] salt = new byte[PBKDF2_MIN_SALT_LENGTH];
+        SALT_RANDOM.nextBytes(salt);
+        return salt;
+    }
+
+
+    /**
      * Create a SecretKeySpec from a passphrase using PBKDF2WithHmacSHA256 (AES-256).
      *
      * <p><strong>Note:</strong> this overload uses a library-fixed internal salt for
-     * backward-compatibility. For maximum security — especially when the same passphrase
-     * must produce distinct keys in different contexts — use
-     * {@link #createSecretKeySpec(char[], byte[], int)} and supply a unique, random salt
+     * backward-compatibility only: the same passphrase produces the same key in every
+     * installation, which enables pre-computation attacks. Use
+     * {@link #createSecretKeySpec(char[], byte[], int)} with a salt from {@link #generateSalt()}
      * stored alongside the ciphertext.</p>
      *
      * @param passphrase the passphrase as a char array (will be zeroed after use)
@@ -205,13 +221,23 @@ public final class CryptUtil {
      * Create a SecretKeySpec from a passphrase using PBKDF2WithHmacSHA256 (AES-256).
      *
      * @param passphrase the passphrase as a char array (will be zeroed after use)
-     * @param salt a caller-supplied salt (should be random and at least 16 bytes)
+     * @param salt a caller-supplied salt (random and at least 16 bytes, see {@link #generateSalt()})
      * @param iterations the PBKDF2 iteration count (minimum 100 000 recommended)
      * @return the SecretKeySpec (AES-256)
-     * @throws GeneralSecurityException In case of a security error
+     * @throws GeneralSecurityException In case of a security error or an invalid salt / iteration count
      */
     public SecretKeySpec createSecretKeySpec(char[] passphrase, byte[] salt, int iterations) throws GeneralSecurityException {
         try {
+            if (passphrase == null) {
+                throw new GeneralSecurityException("Passphrase must not be null.");
+            }
+            if (salt == null || salt.length < PBKDF2_MIN_SALT_LENGTH) {
+                throw new GeneralSecurityException("Salt must have at least " + PBKDF2_MIN_SALT_LENGTH + " bytes.");
+            }
+            if (iterations < 1) {
+                throw new GeneralSecurityException("Invalid iteration count: " + iterations);
+            }
+
             PBEKeySpec pbeSpec = new PBEKeySpec(passphrase, salt, iterations, PBKDF2_KEY_LENGTH_BITS);
             try {
                 SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
@@ -225,7 +251,9 @@ public final class CryptUtil {
                 pbeSpec.clearPassword();
             }
         } finally {
-            java.util.Arrays.fill(passphrase, '\0');
+            if (passphrase != null) {
+                java.util.Arrays.fill(passphrase, '\0');
+            }
         }
     }
 
@@ -234,8 +262,9 @@ public final class CryptUtil {
      * Create a SecretKeySpec from an {@link ISecuredSecretValue} passphrase using PBKDF2WithHmacSHA256 (AES-256).
      *
      * <p><strong>Note:</strong> this overload uses a library-fixed internal salt for
-     * backward-compatibility. For maximum security supply a unique, random salt via
-     * {@link #createSecretKeySpec(ISecuredSecretValue, byte[], int)}.</p>
+     * backward-compatibility only: the same passphrase produces the same key in every
+     * installation. Use {@link #createSecretKeySpec(ISecuredSecretValue, byte[], int)} with a
+     * salt from {@link #generateSalt()}.</p>
      *
      * @param passphrase the passphrase
      * @return the SecretKeySpec (AES-256)
@@ -250,10 +279,10 @@ public final class CryptUtil {
      * Create a SecretKeySpec from an {@link ISecuredSecretValue} passphrase using PBKDF2WithHmacSHA256 (AES-256).
      *
      * @param passphrase the passphrase
-     * @param salt a caller-supplied salt (should be random and at least 16 bytes)
+     * @param salt a caller-supplied salt (random and at least 16 bytes, see {@link #generateSalt()})
      * @param iterations the PBKDF2 iteration count (minimum 100 000 recommended)
      * @return the SecretKeySpec (AES-256)
-     * @throws GeneralSecurityException In case of a security error
+     * @throws GeneralSecurityException In case of a security error or an invalid salt / iteration count
      */
     public SecretKeySpec createSecretKeySpec(ISecuredSecretValue passphrase, byte[] salt, int iterations) throws GeneralSecurityException {
         if (passphrase == null || passphrase.getValue() == null) {

@@ -34,6 +34,14 @@ public class CertificateVerifierTest {
 
 
     /**
+     * Constructor for CertificateVerifierTest
+     */
+    public CertificateVerifierTest() {
+        // NOP
+    }
+
+
+    /**
      * Test that revocation checking is disabled by default
      */
     @Test
@@ -155,7 +163,7 @@ public class CertificateVerifierTest {
     public void testVerifyCertificateWithCa() throws Exception {
         KeyPair caKeyPair = PKIUtil.getInstance().generateKeyPair(null, KEY_ALGORITHM, 2048);
         CertificateStore caStore = CertificateUtilFactory.getInstance().getGenerator()
-                .createCreateCertificate(caKeyPair, "TestCA", TEST_HOST, new Date(), 365);
+                .createCACertificate(caKeyPair, null, "TestCA", new Date(), 365);
         assertNotNull(caStore);
 
         CertificateStore leafStore = CertificateUtilFactory.getInstance().getGenerator()
@@ -224,7 +232,7 @@ public class CertificateVerifierTest {
     public void testVerifyTwoCertChain() throws Exception {
         KeyPair caKeyPair = PKIUtil.getInstance().generateKeyPair(null, KEY_ALGORITHM, 2048);
         CertificateStore caStore = CertificateUtilFactory.getInstance().getGenerator()
-                .createCreateCertificate(caKeyPair, "ChainCA", TEST_HOST, new Date(), 365);
+                .createCACertificate(caKeyPair, null, "ChainCA", new Date(), 365);
         assertNotNull(caStore);
 
         CertificateStore leafStore = CertificateUtilFactory.getInstance().getGenerator()
@@ -270,7 +278,7 @@ public class CertificateVerifierTest {
     public void testRevocationEnabledTwoCertChain() throws Exception {
         KeyPair caKeyPair = PKIUtil.getInstance().generateKeyPair(null, KEY_ALGORITHM, 2048);
         CertificateStore caStore = CertificateUtilFactory.getInstance().getGenerator()
-                .createCreateCertificate(caKeyPair, "RevCA", TEST_HOST, new Date(), 365);
+                .createCACertificate(caKeyPair, null, "RevCA", new Date(), 365);
         assertNotNull(caStore);
 
         CertificateStore leafStore = CertificateUtilFactory.getInstance().getGenerator()

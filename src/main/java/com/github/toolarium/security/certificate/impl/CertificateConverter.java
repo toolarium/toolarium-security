@@ -36,6 +36,14 @@ public class CertificateConverter implements ICertificateConverter {
     
 
     /**
+     * Constructor for CertificateConverter
+     */
+    public CertificateConverter() {
+        // NOP
+    }
+
+
+    /**
      * @see com.github.toolarium.security.certificate.ICertificateConverter#getX509Certificates(java.io.File)
      */
     @Override

@@ -19,6 +19,7 @@ import javax.crypto.SecretKey;
  * @author patrick
  */
 public final class JavaSecurityTester {
+    /** the number of nanoseconds per second */
     public static final double NANOSECS = 1000000000.0;
     /** Represents the AES algorithm as string */
     public static final String ALGORITHM_AES = "AES";

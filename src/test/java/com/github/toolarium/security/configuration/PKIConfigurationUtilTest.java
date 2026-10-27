@@ -37,6 +37,14 @@ public class PKIConfigurationUtilTest {
 
     
     /**
+     * Constructor for PKIConfigurationUtilTest
+     */
+    public PKIConfigurationUtilTest() {
+        // NOP
+    }
+
+
+    /**
      * Test privat key use case.
      * 
      * @throws GeneralSecurityException In case of general security exception

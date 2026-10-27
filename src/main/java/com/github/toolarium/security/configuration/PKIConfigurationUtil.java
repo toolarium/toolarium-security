@@ -11,16 +11,25 @@ import com.github.toolarium.security.pki.KeyConverterFactory;
 import com.github.toolarium.security.pki.util.PKIUtil;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
+import java.security.KeyFactory;
 import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.cert.X509Certificate;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.List;
-import javax.net.ssl.KeyManagerFactory;
+import java.util.regex.Pattern;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
+import org.bouncycastle.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
+import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
+import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
+import org.bouncycastle.asn1.x9.X9ObjectIdentifiers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,14 +42,20 @@ import org.slf4j.LoggerFactory;
  */
 public final class PKIConfigurationUtil {
     private static final Logger LOG = LoggerFactory.getLogger(PKIConfigurationUtil.class);
+    /** system property to change the trust manager algorithm, default PKIX; SunX509 restores the behaviour of version 1.1.8 and older */
+    private static final String TRUST_MANAGER_ALGORITHM_PROPERTY = "toolarium.security.trustManagerAlgorithm";
     private static final String START_CERTIFICATE = "-----BEGIN";
     private static final String END_CERTIFICATE_KEY = "CERTIFICATE-----";
     private static final String END_PRIVATE_KEY = "PRIVATE KEY-----";
     private static final String END_PUBLIC_KEY = "PUBLIC KEY-----";
+    private static final String ENCRYPTED = "ENCRYPTED";
+    private static final Pattern PEM_BOUNDARY = Pattern.compile("-----(BEGIN|END)[^-]*-----");
      
     
     /**
      * Private class, the only instance of the singelton which will be created by accessing the holder class.
+     *
+     * @author patrick
      */
     private static final class HOLDER {
         static final PKIConfigurationUtil INSTANCE = new PKIConfigurationUtil();
@@ -149,7 +164,7 @@ public final class PKIConfigurationUtil {
         
         // get certificate as key-store
         final KeyStore trustKeyStore = getTrustKeyStore(alias, certificate);
-        final TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+        final TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(System.getProperty(TRUST_MANAGER_ALGORITHM_PROPERTY, TrustManagerFactory.getDefaultAlgorithm()));
         trustManagerFactory.init(trustKeyStore);
         return trustManagerFactory.getTrustManagers();
     }
@@ -189,20 +204,28 @@ public final class PKIConfigurationUtil {
             if (idx < 0) {
                 throw new GeneralSecurityException("Invalid private key!");
             }
-            
-            String readKeyType = privateKeyString.substring(START_CERTIFICATE.length() + 1, idx).trim();
+
+            String readKeyType = readKeyType(privateKeyString, idx);
+            if (readKeyType.startsWith(ENCRYPTED)) {
+                throw new GeneralSecurityException("Encrypted private keys are not supported!");
+            }
+
+            if (readKeyType.isEmpty()) {
+                // generic PKCS#8 header (-----BEGIN PRIVATE KEY-----): the key type is not part of the header
+                return getGenericPrivateKey(privateKeyString, keyType);
+            }
+
             keyType = readKeyType;
-            
         }
 
-        if (keyType == null) {
+        if (keyType == null || keyType.isBlank()) {
             keyType = "RSA";
         }
-        
+
         try {
-            return KeyConverterFactory.getInstance().getConverter(keyType).getPrivateKey(privateKeyString);
-        } catch (IOException e) {
-            throw new GeneralSecurityException(e.getMessage(), e);
+            return KeyConverterFactory.getInstance().getConverter(keyType.trim()).getPrivateKey(privateKeyString);
+        } catch (IOException | IllegalArgumentException e) {
+            throw new GeneralSecurityException("Invalid private key: " + e.getMessage(), e);
         }
     }
 
@@ -242,19 +265,126 @@ public final class PKIConfigurationUtil {
                 throw new GeneralSecurityException("Invalid public key!");
             }
             
-            String readKeyType = publicKeyString.substring(START_CERTIFICATE.length() + 1, idx).trim();
+            String readKeyType = readKeyType(publicKeyString, idx);
+            if (readKeyType.isEmpty()) {
+                // generic X.509 header (-----BEGIN PUBLIC KEY-----): the key type is not part of the header
+                return getGenericPublicKey(publicKeyString, keyType);
+            }
+
             keyType = readKeyType;
-            
         }
 
-        if (keyType == null) {
+        if (keyType == null || keyType.isBlank()) {
             keyType = "RSA";
         }
-        
+
         try {
-            return KeyConverterFactory.getInstance().getConverter(keyType).getPublicKey(publicKeyString);
-        } catch (IOException e) {
-            throw new GeneralSecurityException(e.getMessage(), e);
+            return KeyConverterFactory.getInstance().getConverter(keyType.trim()).getPublicKey(publicKeyString);
+        } catch (IOException | IllegalArgumentException e) {
+            throw new GeneralSecurityException("Invalid public key: " + e.getMessage(), e);
+        }
+    }
+
+
+    /**
+     * Read the key type from a PEM header, e.g. <code>RSA</code> from <code>-----BEGIN RSA PRIVATE KEY-----</code>.
+     *
+     * @param pem the PEM string
+     * @param endIndex the index of the end of the header (start of <code>PRIVATE KEY-----</code> / <code>PUBLIC KEY-----</code>)
+     * @return the key type or an empty string if the header contains no key type
+     */
+    private String readKeyType(String pem, int endIndex) {
+        int startIndex = START_CERTIFICATE.length() + 1;
+        if (endIndex <= startIndex) {
+            return "";
+        }
+        return pem.substring(startIndex, endIndex).trim();
+    }
+
+
+    /**
+     * Get a private key from a generic PKCS#8 PEM (-----BEGIN PRIVATE KEY-----). The algorithm is
+     * taken from the given key type or, if not defined, from the algorithm identifier inside the key.
+     *
+     * @param pem the PEM string
+     * @param keyType the key type or null
+     * @return the private key
+     * @throws GeneralSecurityException In case of an invalid key
+     */
+    private PrivateKey getGenericPrivateKey(String pem, String keyType) throws GeneralSecurityException {
+        byte[] decoded = decodePem(pem);
+        try {
+            String type = keyType;
+            if (type == null || type.isBlank()) {
+                try {
+                    type = getKeyType(PrivateKeyInfo.getInstance(decoded).getPrivateKeyAlgorithm().getAlgorithm());
+                } catch (RuntimeException e) {
+                    throw new GeneralSecurityException("Invalid private key: " + e.getMessage(), e);
+                }
+            }
+
+            return KeyFactory.getInstance(type.trim()).generatePrivate(new PKCS8EncodedKeySpec(decoded));
+        } finally {
+            Arrays.fill(decoded, (byte) 0);
+        }
+    }
+
+
+    /**
+     * Get a public key from a generic X.509 PEM (-----BEGIN PUBLIC KEY-----). The algorithm is
+     * taken from the given key type or, if not defined, from the algorithm identifier inside the key.
+     *
+     * @param pem the PEM string
+     * @param keyType the key type or null
+     * @return the public key
+     * @throws GeneralSecurityException In case of an invalid key
+     */
+    private PublicKey getGenericPublicKey(String pem, String keyType) throws GeneralSecurityException {
+        byte[] decoded = decodePem(pem);
+        String type = keyType;
+        if (type == null || type.isBlank()) {
+            try {
+                type = getKeyType(SubjectPublicKeyInfo.getInstance(decoded).getAlgorithm().getAlgorithm());
+            } catch (RuntimeException e) {
+                throw new GeneralSecurityException("Invalid public key: " + e.getMessage(), e);
+            }
+        }
+
+        return KeyFactory.getInstance(type.trim()).generatePublic(new X509EncodedKeySpec(decoded));
+    }
+
+
+    /**
+     * Get the key type (key factory algorithm) of an algorithm identifier, e.g. <code>RSA</code> for 1.2.840.113549.1.1.1.
+     *
+     * @param algorithm the algorithm identifier of the key
+     * @return the key type; for an unknown identifier its dotted form, which the JDK resolves for further algorithms (e.g. Ed25519)
+     */
+    private String getKeyType(ASN1ObjectIdentifier algorithm) {
+        if (PKCSObjectIdentifiers.rsaEncryption.equals(algorithm)) {
+            return "RSA";
+        } else if (X9ObjectIdentifiers.id_ecPublicKey.equals(algorithm)) {
+            return "EC";
+        } else if (X9ObjectIdentifiers.id_dsa.equals(algorithm)) {
+            return "DSA";
+        }
+        return algorithm.getId();
+    }
+
+
+    /**
+     * Decode the base64 content of a PEM string
+     *
+     * @param pem the PEM string
+     * @return the decoded content
+     * @throws GeneralSecurityException In case of an invalid encoding
+     */
+    private byte[] decodePem(String pem) throws GeneralSecurityException {
+        String base64 = PEM_BOUNDARY.matcher(pem).replaceAll("").replaceAll("\\s", "");
+        try {
+            return Base64.getDecoder().decode(base64);
+        } catch (IllegalArgumentException e) {
+            throw new GeneralSecurityException("Invalid base64 encoding: " + e.getMessage(), e);
         }
     }
 

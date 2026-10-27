@@ -6,18 +6,21 @@
 package com.github.toolarium.security.pki.impl;
 
 
-import com.github.toolarium.common.ByteArray;
 import com.github.toolarium.security.pki.IKeyConverter;
-import com.github.toolarium.security.pki.impl.rsa.RSAPrivateKeyPKCS8;
-import com.github.toolarium.security.pki.util.PKIUtil;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.spec.InvalidKeySpecException;
+import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
+import java.util.Arrays;
 import java.util.Base64;
+import org.bouncycastle.asn1.DERNull;
+import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
+import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
+import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,13 +77,7 @@ public class RSAKeyConverter extends AbstractKeyConverter {
             return null;
         }
         
-        @SuppressWarnings("resource")
-        ByteArray t = new ByteArray(content).replace(new ByteArray(PUBLIC_RSA_KEY_START), new ByteArray());
-        t = t.replace(new ByteArray(PUBLIC_RSA_KEY_END), new ByteArray());
-        t = t.replace(new ByteArray("\r"), new ByteArray());
-        t = t.replace(new ByteArray(NL), new ByteArray());
-
-        X509EncodedKeySpec spec = new X509EncodedKeySpec(Base64.getDecoder().decode(t.toBytes()));
+        X509EncodedKeySpec spec = new X509EncodedKeySpec(decodePublicKeyPem(content, PUBLIC_RSA_KEY_START, PUBLIC_RSA_KEY_END));
         KeyFactory kf = KeyFactory.getInstance(getType());
         return kf.generatePublic(spec);
     }
@@ -97,19 +94,33 @@ public class RSAKeyConverter extends AbstractKeyConverter {
         
         String normalizedData = normalizePKCS8(content);
 
-        PrivateKey privateKey = null;
         try {
             return super.getPrivateKey(normalizedData);
         } catch (InvalidKeySpecException e) {
-            RSAPrivateKeyPKCS8 privKeySpec = new RSAPrivateKeyPKCS8(Base64.getDecoder().decode(normalizedData.getBytes()));
-            privKeySpec.checkEncoding();
-            privateKey = privKeySpec;
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("File format of " + getType() + " private key is: " + privateKey.getFormat());
+            // not PKCS#8: try PKCS#1 (e.g. openssl genrsa -traditional), which is wrapped into PKCS#8
+            byte[] decoded = Base64.getDecoder().decode(normalizedData.getBytes());
+            byte[] pkcs8 = null;
+            try {
+                org.bouncycastle.asn1.pkcs.RSAPrivateKey pkcs1 = org.bouncycastle.asn1.pkcs.RSAPrivateKey.getInstance(decoded);
+                PrivateKeyInfo privateKeyInfo = new PrivateKeyInfo(new AlgorithmIdentifier(PKCSObjectIdentifiers.rsaEncryption, DERNull.INSTANCE), pkcs1);
+                pkcs8 = privateKeyInfo.getEncoded();
+                PrivateKey privateKey = KeyFactory.getInstance(getType()).generatePrivate(new PKCS8EncodedKeySpec(pkcs8));
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("Converted PKCS#1 " + getType() + " private key into " + privateKey.getFormat() + ".");
+                }
+                return privateKey;
+            } catch (IOException | RuntimeException | GeneralSecurityException ex) {
+                InvalidKeySpecException result = new InvalidKeySpecException("Invalid " + getType() + " private key (neither PKCS#8 nor PKCS#1): " + e.getMessage(), e);
+                result.addSuppressed(ex);
+                throw result;
+            } finally {
+                // clear the decoded key material
+                Arrays.fill(decoded, (byte) 0);
+                if (pkcs8 != null) {
+                    Arrays.fill(pkcs8, (byte) 0);
+                }
             }
         }
-        
-        return privateKey;
     }
 
 
@@ -118,7 +129,7 @@ public class RSAKeyConverter extends AbstractKeyConverter {
      */
     @Override
     public String formatPublicKey(PublicKey publicKey) {
-        return PKIUtil.getInstance().formatBuffer(new ByteArray(Base64.getEncoder().encode(publicKey.getEncoded())), 64, PUBLIC_RSA_KEY_START, PUBLIC_RSA_KEY_END).toString();
+        return formatPublicKeyPem(publicKey, PUBLIC_RSA_KEY_START, PUBLIC_RSA_KEY_END);
     }
 
 
@@ -127,7 +138,7 @@ public class RSAKeyConverter extends AbstractKeyConverter {
      */
     @Override
     public String formatPKCS8(String content) {
-        return PKIUtil.getInstance().formatBuffer(content, 64, PRIVATE_RSA_KEY_START, PRIVATE_RSA_KEY_END);
+        return formatPrivateKeyPem(content, PRIVATE_RSA_KEY_START, PRIVATE_RSA_KEY_END);
     }
     
 
@@ -136,6 +147,6 @@ public class RSAKeyConverter extends AbstractKeyConverter {
      */
     @Override
     public String normalizePKCS8(String content) {
-        return PKIUtil.getInstance().normalizeBuffer(content, PRIVATE_RSA_KEY_START, PRIVATE_RSA_KEY_END);
+        return normalizePrivateKeyPem(content, PRIVATE_RSA_KEY_START, PRIVATE_RSA_KEY_END);
     }
 }

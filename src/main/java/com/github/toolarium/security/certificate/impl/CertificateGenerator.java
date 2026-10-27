@@ -19,6 +19,7 @@ import java.security.cert.X509Certificate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
+import java.util.Collections;
 import java.util.Date;
 import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.x500.X500Name;
@@ -58,6 +59,31 @@ public class CertificateGenerator implements ICertificateGenerator {
     private static final int SERIAL_NUMBER_BITS = 128;
 
     
+    /**
+     * Constructor for CertificateGenerator
+     */
+    public CertificateGenerator() {
+        // NOP
+    }
+
+
+    /**
+     * @see com.github.toolarium.security.certificate.ICertificateGenerator#createCACertificate(java.lang.String, int)
+     */
+    @Override
+    public CertificateStore createCACertificate(String dn, int validityDays) throws GeneralSecurityException {
+        return createCertificate(PKIUtil.getInstance().generateKeyPair(null, "RSA", 2048), null, dn, null, new Date() /* startDate */, validityDays, true);
+    }
+
+
+    /**
+     * @see com.github.toolarium.security.certificate.ICertificateGenerator#createCACertificate(java.security.KeyPair, com.github.toolarium.security.certificate.dto.CertificateStore, java.lang.String, java.util.Date, int)
+     */
+    @Override
+    public CertificateStore createCACertificate(KeyPair keyPair, CertificateStore parent, String dn, Date startDate, int validityDays) throws GeneralSecurityException {
+        return createCertificate(keyPair, parent, dn, null, startDate, validityDays, true);
+    }
+
     /**
      * @see com.github.toolarium.security.certificate.ICertificateGenerator#createCreateCertificate(com.github.toolarium.security.certificate.dto.CertificateStore, java.lang.String, java.lang.String, java.util.Date, int)
      */
@@ -104,6 +130,31 @@ public class CertificateGenerator implements ICertificateGenerator {
                                                     final String alternativeDn,
                                                     final Date startDate, 
                                                     final int inputValidityDays) throws GeneralSecurityException {
+        return createCertificate(keyPair, parent, dn, alternativeDn, startDate, inputValidityDays, false);
+    }
+
+
+    /**
+     * Creates a certificate
+     *
+     * @param keyPair the key pair to create the certificate from
+     * @param parent the parent certificate chain or null for a self-signed certificate
+     * @param dn the name
+     * @param alternativeDn alternative dn (e.g. hostname), only used for end-entity certificates
+     * @param startDate the start date
+     * @param inputValidityDays number of days (min 1 day)
+     * @param isCa true to create a CA certificate (basic constraints CA, key usage keyCertSign and cRLSign); false
+     *        to create an end-entity certificate (subject alternative names, server and client authentication)
+     * @return a new created certificate
+     * @throws GeneralSecurityException In case of a creation error
+     */
+    private CertificateStore createCertificate(final KeyPair keyPair,
+                                               final CertificateStore parent,
+                                               final String dn,
+                                               final String alternativeDn,
+                                               final Date startDate,
+                                               final int inputValidityDays,
+                                               final boolean isCa) throws GeneralSecurityException {
         try {
             int validityDays = inputValidityDays;
             LocalDateTime maxDate;
@@ -151,15 +202,18 @@ public class CertificateGenerator implements ICertificateGenerator {
             } else {
                 sanNames = new GeneralName[] {new GeneralName(GeneralName.dNSName, dnName), new GeneralName(GeneralName.dNSName, "localhost")};
             }
-            final X509v3CertificateBuilder builder = new X509v3CertificateBuilder(issuer, serial, notBeforedate, notAfter, name, publicKeyInfo)
-                                                            .addExtension(Extension.subjectAlternativeName, false, new GeneralNames(sanNames));
+            final X509v3CertificateBuilder builder = new X509v3CertificateBuilder(issuer, serial, notBeforedate, notAfter, name, publicKeyInfo);
+            if (!isCa) {
+                // a CA certificate is not bound to a host name
+                builder.addExtension(Extension.subjectAlternativeName, false, new GeneralNames(sanNames));
+            }
             // add extensions
 
-            boolean isCa = (parent == null);
+            boolean isSelfSigned = (parent == null || parent.getCertificates() == null || parent.getCertificates().length <= 0);
             JcaX509ExtensionUtils extUtils = new JcaX509ExtensionUtils();
             AuthorityKeyIdentifier authorityKeyIdentifier;
-            if (isCa) {
-                // self-signed CA: AKI references own public key
+            if (isSelfSigned) {
+                // self-signed: AKI references own public key
                 authorityKeyIdentifier = extUtils.createAuthorityKeyIdentifier(keyPair.getPublic());
             } else {
                 // CA-signed cert: AKI must reference the issuer's (CA's) public key
@@ -175,9 +229,12 @@ public class CertificateGenerator implements ICertificateGenerator {
                 usage = new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyEncipherment | KeyUsage.keyAgreement);
             }
             builder.addExtension(Extension.keyUsage, true, usage.getEncoded());
-            ExtendedKeyUsage usageEx = new ExtendedKeyUsage(new KeyPurposeId[] {KeyPurposeId.id_kp_serverAuth, KeyPurposeId.id_kp_clientAuth, KeyPurposeId.id_kp_emailProtection });
-            boolean critical = true;
-            builder.addExtension(Extension.extendedKeyUsage, !critical, usageEx.getEncoded());
+            if (!isCa) {
+                // a CA certificate must not be usable as server / client certificate
+                ExtendedKeyUsage usageEx = new ExtendedKeyUsage(new KeyPurposeId[] {KeyPurposeId.id_kp_serverAuth, KeyPurposeId.id_kp_clientAuth, KeyPurposeId.id_kp_emailProtection });
+                boolean critical = true;
+                builder.addExtension(Extension.extendedKeyUsage, !critical, usageEx.getEncoded());
+            }
             
             // build certificate
             String signatureAlgorithm = "SHA256WithRSAEncryption";
@@ -211,7 +268,12 @@ public class CertificateGenerator implements ICertificateGenerator {
                 //chain[1] = parent.getCertificates()[parentChainLength - 1];
             }
 
-            CertificateUtilFactory.getInstance().getVerifier().verifyCertificateChain(LOG::info, chain);
+            // check the signatures only: the generator must be able to create expired or not yet valid certificates
+            CertificateVerifier verifier = CertificateUtilFactory.getInstance().createVerifier(false);
+            verifier.setStrictChainValidation(false);
+            // the root of a generated chain is trusted by definition
+            verifier.setTrustedCertificates(Collections.singleton(chain[chain.length - 1]));
+            verifier.verifyCertificateChain(LOG::info, chain);
             return new CertificateStore(keyPair, chain);
         } catch (OperatorCreationException | IOException ex) {
             throw new GeneralSecurityException(ex.getMessage(), ex);

@@ -21,7 +21,6 @@ public final class CertificateUtilFactory {
     private volatile ICertificateGenerator certificateGenerator;
     private volatile ICertificateConverter certificateConverter;
     private volatile ICertificateFilter certificateFilter;
-    private volatile ICertificateVerifier certificateVerifier;
     private volatile ICertificateChainAnalyzer certificateChainAnalyzer;
     
     
@@ -105,19 +104,26 @@ public final class CertificateUtilFactory {
 
     
     /**
-     * Get the filter
+     * Get a new verifier. Every call returns an own instance, so that a changed configuration (e.g. revocation
+     * checking) of one caller does not affect other callers.
      *
-     * @return the filter
+     * @return the verifier
      */
     public ICertificateVerifier getVerifier() {
-        if (certificateVerifier == null) {
-            synchronized (this) {
-                if (certificateVerifier == null) {
-                    certificateVerifier = new CertificateVerifier();
-                }
-            }
-        }
-        return certificateVerifier;
+        return new CertificateVerifier();
+    }
+
+
+    /**
+     * Create a new verifier instance which is not shared with other callers.
+     *
+     * @param revocationEnabled true to enable revocation checking
+     * @return the new verifier
+     */
+    public CertificateVerifier createVerifier(boolean revocationEnabled) {
+        CertificateVerifier verifier = new CertificateVerifier();
+        verifier.setRevocationEnabled(revocationEnabled);
+        return verifier;
     }
 
 

@@ -6,6 +6,7 @@
 package com.github.toolarium.security.ssl;
 
 import com.github.toolarium.security.keystore.ISecurityManagerProvider;
+import com.github.toolarium.security.ssl.impl.RestrictedSSLContext;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import javax.net.ssl.SSLContext;
@@ -18,10 +19,8 @@ import org.slf4j.LoggerFactory;
  * Defines the SSL context factory.
  *
  * <p>Use {@link #createSslContext(ISecurityManagerProvider, String...)} to restrict the
- * enabled cipher suites. When no cipher suites are supplied the JVM defaults apply.
- * Because Java's {@link SSLContext} does not support setting a global cipher suite list,
- * call {@link #applyCipherSuites(SSLEngine, String...)} on every {@link SSLEngine} or
- * {@link javax.net.ssl.SSLSocket} created from the context to enforce the restriction.</p>
+ * enabled cipher suites: the returned context applies them to every {@link SSLEngine} and socket
+ * it creates. When no cipher suites are supplied the JVM defaults apply.</p>
  *
  * @author patrick
  */
@@ -34,13 +33,10 @@ public final class SSLContextFactory {
      * All TLS 1.2 suites provide forward secrecy (ECDHE/DHE) and authenticated encryption
      * (GCM). RC4, NULL, EXPORT, and CBC-based suites are intentionally excluded.</p>
      *
-     * <p>Pass this constant to {@link #applyCipherSuites(SSLEngine, String...)} on
-     * every {@link SSLEngine} or {@link javax.net.ssl.SSLSocket} you create:</p>
-     * <pre>
-     *     SSLEngine engine = ctx.createSSLEngine();
-     *     SSLContextFactory.getInstance().applyCipherSuites(engine, SSLContextFactory.RECOMMENDED_CIPHER_SUITES);
-     * </pre>
+     * @deprecated the array can be modified by any code in the JVM, use {@link #getRecommendedCipherSuites()}
+     *             which returns a copy
      */
+    @Deprecated
     public static final String[] RECOMMENDED_CIPHER_SUITES = {
         // TLS 1.3
         "TLS_AES_256_GCM_SHA384",
@@ -55,6 +51,7 @@ public final class SSLContextFactory {
         "TLS_DHE_RSA_WITH_AES_128_GCM_SHA256"
     };
 
+    private static final String[] DEFAULT_RECOMMENDED_CIPHER_SUITES = RECOMMENDED_CIPHER_SUITES.clone();
     private static final Logger LOG = LoggerFactory.getLogger(SSLContextFactory.class);
     private final SecureRandom secureRandom;
 
@@ -87,12 +84,32 @@ public final class SSLContextFactory {
 
 
     /**
+     * Get a curated allowlist of strong cipher suites for TLS 1.3 and TLS 1.2.
+     *
+     * <p>TLS 1.3 suites are listed first (preferred); the JVM negotiates 1.3 automatically
+     * when both peers support it and falls back to 1.2 otherwise.
+     * All TLS 1.2 suites provide forward secrecy (ECDHE/DHE) and authenticated encryption
+     * (GCM). RC4, NULL, EXPORT, and CBC-based suites are intentionally excluded.</p>
+     *
+     * <p>Pass them to {@link #createSslContext(ISecurityManagerProvider, String...)}:</p>
+     * <pre>
+     *     SSLContextFactory factory = SSLContextFactory.getInstance();
+     *     SSLContext ctx = factory.createSslContext(provider, factory.getRecommendedCipherSuites());
+     * </pre>
+     *
+     * @return a copy of the recommended cipher suites
+     */
+    public String[] getRecommendedCipherSuites() {
+        return DEFAULT_RECOMMENDED_CIPHER_SUITES.clone();
+    }
+
+
+    /**
      * Create an SSL context using the JVM default cipher suites.
      *
      * <p><strong>Note:</strong> JVM defaults may include weak cipher suites. For production
-     * use, call {@link #applyCipherSuites(SSLEngine, String...)} with
-     * {@link #RECOMMENDED_CIPHER_SUITES} on every {@link SSLEngine} or
-     * {@link javax.net.ssl.SSLSocket} created from the returned context.</p>
+     * use, pass {@link #getRecommendedCipherSuites()} to
+     * {@link #createSslContext(ISecurityManagerProvider, String...)}.</p>
      *
      * @param securityManagerProvider the security manager provider
      * @return the SSL context
@@ -108,9 +125,10 @@ public final class SSLContextFactory {
      *
      * <p>When {@code allowedCipherSuites} is non-empty the supplied suites are validated
      * against those supported by the context. Unsupported suites are logged and ignored.
-     * Call {@link #applyCipherSuites(SSLEngine, String...)} with the same list on every
-     * {@link SSLEngine} or {@link javax.net.ssl.SSLSocket} created from the returned context
-     * to enforce the restriction, as {@link SSLContext} itself does not apply it globally.</p>
+     * The returned context ({@link RestrictedSSLContext}) enables only the supported suites on every
+     * {@link SSLEngine}, {@link javax.net.ssl.SSLSocket} and {@link javax.net.ssl.SSLServerSocket}
+     * it creates and in its default {@link javax.net.ssl.SSLParameters}. If none of the suites is
+     * supported, a warning is logged and the JVM defaults apply.</p>
      *
      * @param securityManagerProvider the security manager provider
      * @param allowedCipherSuites the cipher suites to allow, or empty/null for JVM defaults
@@ -124,7 +142,12 @@ public final class SSLContextFactory {
         sslContext.init(securityManagerProvider.getKeyManagers(), securityManagerProvider.getTrustManagers(), secureRandom);
 
         if (allowedCipherSuites != null && allowedCipherSuites.length > 0) {
-            applyCipherSuites(sslContext.createSSLEngine(), allowedCipherSuites);
+            String[] cipherSuites = filterSupportedCipherSuites(sslContext.createSSLEngine(), allowedCipherSuites);
+            if (cipherSuites.length > 0) {
+                return new RestrictedSSLContext(sslContext, cipherSuites);
+            }
+
+            LOG.warn("None of the allowed cipher suites is supported by the JVM, the JVM default cipher suites are used.");
         }
 
         return sslContext;
@@ -144,6 +167,21 @@ public final class SSLContextFactory {
             return;
         }
 
+        String[] enabled = filterSupportedCipherSuites(engine, allowedCipherSuites);
+        if (enabled.length > 0) {
+            engine.setEnabledCipherSuites(enabled);
+        }
+    }
+
+
+    /**
+     * Filter the cipher suites which are supported by the given {@link SSLEngine}. Unsupported suites are logged and skipped.
+     *
+     * @param engine the SSL engine
+     * @param allowedCipherSuites the cipher suites to filter
+     * @return the supported cipher suites
+     */
+    private String[] filterSupportedCipherSuites(SSLEngine engine, String... allowedCipherSuites) {
         java.util.Set<String> supported = new java.util.HashSet<>(java.util.Arrays.asList(engine.getSupportedCipherSuites()));
         java.util.List<String> enabled = new java.util.ArrayList<>();
         for (String suite : allowedCipherSuites) {
@@ -153,9 +191,6 @@ public final class SSLContextFactory {
                 LOG.warn("Cipher suite not supported by JVM, skipping: " + suite);
             }
         }
-
-        if (!enabled.isEmpty()) {
-            engine.setEnabledCipherSuites(enabled.toArray(new String[0]));
-        }
+        return enabled.toArray(new String[0]);
     }
 }

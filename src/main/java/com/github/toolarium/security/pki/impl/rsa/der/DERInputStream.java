@@ -142,7 +142,7 @@ public class DERInputStream {
             throw new IOException("DER input, Integer tag error");
         }
 
-        return buffer.getUnsigned(getLength(buffer));
+        return buffer.getUnsigned(getDefiniteLength());
     }
 
     
@@ -157,7 +157,7 @@ public class DERInputStream {
             throw new IOException("DER input, Enumerated tag error");
         }
 
-        return buffer.getUnsigned(getLength(buffer));
+        return buffer.getUnsigned(getDefiniteLength());
     }
 
     
@@ -172,7 +172,10 @@ public class DERInputStream {
             throw new IOException("DER input not an bit string");
         }
         
-        int length = getLength(buffer);
+        int length = getDefiniteLength();
+        if (length < 1) {
+            throw new IOException("DER input, invalid bit string length: " + length);
+        }
 
         // This byte affects alignment and padding (for the last byte). Use getUnalignedBitString() for none 8-bit aligned bit strings.
         if (buffer.read() != 0) {
@@ -201,7 +204,10 @@ public class DERInputStream {
             throw new IOException("DER input not a bit string");
         }
         
-        int length = getLength(buffer) - 1;
+        int length = getDefiniteLength() - 1;
+        if (length < 0) {
+            throw new IOException("DER input, invalid bit string length: " + length);
+        }
 
         // First byte = number of excess bits in the last octet of the representation.
         int validBits = length * 8 - buffer.read();
@@ -224,7 +230,7 @@ public class DERInputStream {
             throw new IOException("DER input not an octet string");
         }
 
-        int length = getLength(buffer);
+        int length = getDefiniteLength();
         byte[] retval = new byte[length];
         if (buffer.read(retval) != length) {
             throw new IOException("short read of DER octet string");
@@ -736,7 +742,7 @@ public class DERInputStream {
             throw new IOException("DER input not a " + stringName + " string");
         }
 
-        int length = getLength(buffer);
+        int length = getDefiniteLength();
         byte[] retval = new byte[length];
 
         if (buffer.read(retval) != length) {
@@ -791,6 +797,10 @@ public class DERInputStream {
     public static int getLength(int lenByte, InputStream in) throws IOException {
         int value;
         int tmp = lenByte;
+        if (tmp < 0) {
+            throw new IOException("DERInputStream.getLength(): unexpected end of data.");
+        }
+
         if ((tmp & 0x080) == 0x00) { // short form, 1 byte datum
             value = tmp;
         } else { // long form or indefinite
@@ -810,8 +820,12 @@ public class DERInputStream {
             }
 
             for (value = 0; tmp > 0; tmp--) {
+                int b = in.read();
+                if (b < 0) {
+                    throw new IOException("DERInputStream.getLength(): truncated length.");
+                }
                 value <<= 8;
-                value += 0x0ff & in.read();
+                value += 0x0ff & b;
             }
 
             if (value < 0 || value > MAX_DER_LENGTH) {
@@ -819,6 +833,22 @@ public class DERInputStream {
             }
         }
         return value;
+    }
+
+
+    /**
+     * Gets a definite length from the input stream. Indefinite lengths are rejected because the
+     * caller allocates an array of the returned size.
+     *
+     * @return the length (&gt;= 0)
+     * @throws IOException in case of an indefinite or invalid length
+     */
+    private int getDefiniteLength() throws IOException {
+        int length = getLength(buffer);
+        if (length < 0) {
+            throw new IOException("DER input, indefinite length is not supported here");
+        }
+        return length;
     }
 }
 

@@ -5,15 +5,12 @@
  */
 package com.github.toolarium.security.pki.impl;
 
-import com.github.toolarium.common.ByteArray;
 import com.github.toolarium.security.pki.IKeyConverter;
-import com.github.toolarium.security.pki.util.PKIUtil;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.PublicKey;
 import java.security.spec.X509EncodedKeySpec;
-import java.util.Base64;
 
 
 /**
@@ -62,13 +59,7 @@ public class DSAKeyConverter extends AbstractKeyConverter {
             return null;
         }
         
-        @SuppressWarnings("resource")
-        ByteArray t = new ByteArray(content).replace(new ByteArray(PUBLIC_DSA_KEY_START), new ByteArray());
-        t = t.replace(new ByteArray(PUBLIC_DSA_KEY_END), new ByteArray());
-        t = t.replace(new ByteArray("\r"), new ByteArray());
-        t = t.replace(new ByteArray(NL), new ByteArray());
-
-        X509EncodedKeySpec spec = new X509EncodedKeySpec(Base64.getDecoder().decode(t.toBytes()));
+        X509EncodedKeySpec spec = new X509EncodedKeySpec(decodePublicKeyPem(content, PUBLIC_DSA_KEY_START, PUBLIC_DSA_KEY_END));
         KeyFactory kf = KeyFactory.getInstance(getType());
         return kf.generatePublic(spec);
     }
@@ -103,7 +94,7 @@ public class DSAKeyConverter extends AbstractKeyConverter {
             return null;
         }
         
-        return PKIUtil.getInstance().formatBuffer(new ByteArray(Base64.getEncoder().encode(publicKey.getEncoded())), 64, PUBLIC_DSA_KEY_START, PUBLIC_DSA_KEY_END).toString();
+        return formatPublicKeyPem(publicKey, PUBLIC_DSA_KEY_START, PUBLIC_DSA_KEY_END);
     }
 
 
@@ -112,7 +103,7 @@ public class DSAKeyConverter extends AbstractKeyConverter {
      */
     @Override
     public String formatPKCS8(String content) {
-        return PKIUtil.getInstance().formatBuffer(content, 64, PRIVATE_DSA_KEY_START, PRIVATE_DSA_KEY_END);
+        return formatPrivateKeyPem(content, PRIVATE_DSA_KEY_START, PRIVATE_DSA_KEY_END);
     }
 
 
@@ -121,6 +112,6 @@ public class DSAKeyConverter extends AbstractKeyConverter {
      */
     @Override
     public String normalizePKCS8(String content) {
-        return PKIUtil.getInstance().normalizeBuffer(content, PRIVATE_DSA_KEY_START, PRIVATE_DSA_KEY_END);
+        return normalizePrivateKeyPem(content, PRIVATE_DSA_KEY_START, PRIVATE_DSA_KEY_END);
     }
 }

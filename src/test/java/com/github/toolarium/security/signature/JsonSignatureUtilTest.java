@@ -54,6 +54,14 @@ public class JsonSignatureUtilTest {
 
     
     /**
+     * Constructor for JsonSignatureUtilTest
+     */
+    public JsonSignatureUtilTest() {
+        // NOP
+    }
+
+
+    /**
      * Test
      * 
      * @throws GeneralSecurityException occurs, if the test contains errors.

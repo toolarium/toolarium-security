@@ -24,6 +24,14 @@ import java.util.List;
 public class CertificateFilter implements ICertificateFilter {
     
     /**
+     * Constructor for CertificateFilter
+     */
+    public CertificateFilter() {
+        // NOP
+    }
+
+
+    /**
      * @see com.github.toolarium.security.certificate.ICertificateFilter#filterValid(java.util.List)
      */
     @Override

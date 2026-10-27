@@ -6,8 +6,11 @@
 package com.github.toolarium.security.certificate.impl;
 
 import com.github.toolarium.security.certificate.ICertificateChainAnalyzer;
+import java.security.GeneralSecurityException;
+import java.security.InvalidKeyException;
 import java.security.KeyPair;
 import java.security.PublicKey;
+import java.security.SignatureException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -70,18 +73,22 @@ public class CertificateChainAnalyzer implements ICertificateChainAnalyzer {
             if (current != null) {
                 chain.add(current);
             } else {
-                LOG.warn("Building chain for " + certs.size() + " cert[s] but had to stop after " + chain.size() + " because I could not find the issuer for " + old.getSubjectX500Principal());
+                LOG.warn("Building chain for {} cert[s] but had to stop after {} because I could not find the issuer for {}", certs.size(), chain.size(), old.getSubjectX500Principal());
                 throw new IllegalArgumentException("Could not determine issuer for certificate: " + old.getSubjectX500Principal() + ". Please ensure certificate list contains all certificates back to the CA's self-signed root!");
             }
 
             if (chain.size() > certs.size()) {
-                LOG.warn("Too many certificates in chain. Chain: " + Arrays.toString(getPrincipals(chain)) + ", Source: " + Arrays.toString(getPrincipals(new ArrayList<X509Certificate>(certs))));
+                LOG.warn("Too many certificates in chain. Chain: {}, Source: {}", Arrays.toString(getPrincipals(chain)), Arrays.toString(getPrincipals(new ArrayList<X509Certificate>(certs))));
                 throw new IllegalStateException("Chain build failed: too many certs in chain (greater than number of input certs)! Chain: " + Arrays.toString(getPrincipals(chain)));
             }
         }
 
-        // Normalise the array
-        return normaliseChain(chain);
+        // Normalise the array: the chain leads towards the root and its last certificate is already verified as
+        // self-signed, so the signatures are not verified again
+        if (chain.size() == 1) {
+            return Collections.unmodifiableList(chain);
+        }
+        return reverse(chain);
     }
 
 
@@ -106,6 +113,11 @@ public class CertificateChainAnalyzer implements ICertificateChainAnalyzer {
      */
     @Override
     public boolean isSelfSigned(X509Certificate certificate) {
+        // a self-signed certificate is self-issued: compare the names before the expensive signature verification
+        if (!certificate.getSubjectX500Principal().equals(certificate.getIssuerX500Principal())) {
+            return false;
+        }
+
         return isSignedBy(certificate, certificate.getPublicKey());
     }
     
@@ -122,7 +134,7 @@ public class CertificateChainAnalyzer implements ICertificateChainAnalyzer {
 
             // if verify does not throw an exception then it's a self-signed certificate
             return true;
-        } catch (Exception e) {
+        } catch (SignatureException | InvalidKeyException e) {
             if (ALLOW_LOG_SELF_SIGN_TESTS && LOG.isDebugEnabled()) {
                 final String dn = certificate.getIssuerX500Principal().getName();
                 String msg = "Signing issue, the [" + dn + "] not signed by [" + signer + "]:" + e.getMessage();
@@ -134,6 +146,10 @@ public class CertificateChainAnalyzer implements ICertificateChainAnalyzer {
                 }
             }
 
+            return false;
+        } catch (GeneralSecurityException e) {
+            // not a signature mismatch but e.g. a missing algorithm or provider: the signature could not be verified
+            LOG.warn("Could not verify the signature of certificate '{}': {}", certificate.getSubjectX500Principal().getName(), e.toString());
             return false;
         }
     }
@@ -194,22 +210,31 @@ public class CertificateChainAnalyzer implements ICertificateChainAnalyzer {
             throw new IllegalArgumentException("Must provide a chain that is non-null and non-empty");
         }
         
-        final List<X509Certificate> out;
         // Sort the list so the root certificate comes first
-        if (!isSelfSigned(chain.get(0))) {
-            // Copy the chain List so we can modify it
-            out = new ArrayList<X509Certificate>(chain);
-
-            Collections.reverse(out);
-
-            // If, even when reversed, the chain doesn't have a root at the start then the chain's invalid
-            if (!isSelfSigned(out.get(0))) {
-                throw new IllegalArgumentException("Neither end of the certificate chain has a Root! " + chain);
-            }
-        } else {
-            out = chain;
+        if (isSelfSigned(chain.get(0))) {
+            return Collections.unmodifiableList(chain);
         }
 
+        // If, even when reversed, the chain doesn't have a root at the start then the chain's invalid;
+        // a chain with one certificate is already checked
+        if (chain.size() == 1 || !isSelfSigned(chain.get(chain.size() - 1))) {
+            throw new IllegalArgumentException("Neither end of the certificate chain has a Root! " + Arrays.toString(getPrincipals(chain)));
+        }
+
+        return reverse(chain);
+    }
+
+
+    /**
+     * Reverse the order of a chain.
+     *
+     * @param chain the chain
+     * @return a read-only reversed copy of the chain
+     */
+    private List<X509Certificate> reverse(List<X509Certificate> chain) {
+        // Copy the chain List so we can modify it
+        final List<X509Certificate> out = new ArrayList<X509Certificate>(chain);
+        Collections.reverse(out);
         return Collections.unmodifiableList(out);
     }
 }

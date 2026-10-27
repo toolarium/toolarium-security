@@ -150,9 +150,13 @@ public class PKIUtilTest {
         PKIUtil.getInstance().processPublicKeyInfo(LOG::debug, null, publicKey);
 
         String privateKeyString = PKIUtil.getInstance().formatPrivateKey(privateKey);
-        LOG.debug("Private key:" + privateKeyString);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Private key:{}", privateKeyString);
+        }
         String publicKeyString = PKIUtil.getInstance().formatPublicKey(publicKey);
-        LOG.debug("Public key:" + publicKeyString);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Public key:{}", publicKeyString);
+        }
 
         PrivateKey privateKey2 = PKIUtil.getInstance().getRSAPrivateKey(new ByteArray(privateKeyString));
         PublicKey publicKey2 = PKIUtil.getInstance().getRSAPublicKey(new ByteArray(publicKeyString));
@@ -177,9 +181,13 @@ public class PKIUtilTest {
         PKIUtil.getInstance().processPublicKeyInfo(LOG::debug, null, publicKey);
 
         String privateKeyString = PKIUtil.getInstance().formatPrivateKey(privateKey);
-        LOG.debug("Private key:" + privateKeyString);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Private key:{}", privateKeyString);
+        }
         String publicKeyString = PKIUtil.getInstance().formatPublicKey(publicKey);
-        LOG.debug("Public key:" + publicKeyString);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Public key:{}", publicKeyString);
+        }
 
         PrivateKey privateKey2 = PKIUtil.getInstance().getDSAPrivateKey(new ByteArray(privateKeyString));
         PublicKey publicKey2 = PKIUtil.getInstance().getDSAPublicKey(new ByteArray(publicKeyString));
@@ -206,9 +214,13 @@ public class PKIUtilTest {
         PKIUtil.getInstance().processPublicKeyInfo(LOG::debug, null, publicKey);
 
         String privateKeyString = PKIUtil.getInstance().formatPrivateKey(privateKey);
-        LOG.debug("Private key:" + privateKeyString);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Private key:{}", privateKeyString);
+        }
         String publicKeyString = PKIUtil.getInstance().formatPublicKey(publicKey);
-        LOG.debug("Public key:" + publicKeyString);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Public key:{}", publicKeyString);
+        }
 
         PrivateKey privateKey2 = PKIUtil.getInstance().getECPrivateKey(new ByteArray(privateKeyString));
         PublicKey publicKey2 = PKIUtil.getInstance().getECPublicKey(new ByteArray(publicKeyString));

@@ -11,6 +11,7 @@ import com.github.toolarium.security.pki.impl.ECKeyConverter;
 import com.github.toolarium.security.pki.impl.RSAKeyConverter;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.util.Locale;
 
 
 /**
@@ -100,18 +101,24 @@ public final class KeyConverterFactory {
 
     
     /**
-     * Get the converter byased on type / algorithm
+     * Get the converter byased on type / algorithm. The type is case-insensitive; ECDSA (e.g. the algorithm of
+     * BouncyCastle EC keys) is the same as EC.
      *
      * @param type the type
      * @return the converter
      * @throws IllegalArgumentException if the key algorithm is not supported
      */
     public IKeyConverter getConverter(String type) {
-        if ("DSA".equals(type)) {
+        String normalizedType = null;
+        if (type != null) {
+            normalizedType = type.trim().toUpperCase(Locale.ROOT);
+        }
+
+        if ("DSA".equals(normalizedType)) {
             return new DSAKeyConverter();
-        } else if ("EC".equals(type)) {
+        } else if ("EC".equals(normalizedType) || "ECDSA".equals(normalizedType)) {
             return new ECKeyConverter();
-        } else if ("RSA".equals(type)) {
+        } else if ("RSA".equals(normalizedType)) {
             return new RSAKeyConverter();
         }
 

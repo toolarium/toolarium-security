@@ -131,10 +131,12 @@ public class CryptoHashUtilTest {
         byte[] digest3 = CryptoHashUtil.getInstance().createHashWithKey(null, key2.getBytes(StandardCharsets.UTF_8.name()), message.getBytes(StandardCharsets.UTF_8.name()));
         byte[] digest4 = CryptoHashUtil.getInstance().createHashWithKey(null, key3.getBytes(StandardCharsets.UTF_8.name()), message.getBytes(StandardCharsets.UTF_8.name()));
 
-        LOG.debug("Hash [" + new String(digest1) + "]");
-        LOG.debug("Hash [" + new String(digest2) + "]");
-        LOG.debug("Hash [" + new String(digest3) + "]");
-        LOG.debug("Hash [" + new String(digest4) + "]");
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Hash [{}]", new String(digest1));
+            LOG.debug("Hash [{}]", new String(digest2));
+            LOG.debug("Hash [{}]", new String(digest3));
+            LOG.debug("Hash [{}]", new String(digest4));
+        }
 
         assertNotNull(digest1);
         assertNotNull(digest2);

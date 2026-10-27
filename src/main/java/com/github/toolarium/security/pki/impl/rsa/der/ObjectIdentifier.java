@@ -107,10 +107,13 @@ public class ObjectIdentifier implements Serializable {
             throw new IOException("X509.ObjectIdentifier() -- data isn't an object ID" + " (tag = " + typeId + ")");
         }
         
-        int bufferEnd = in.available() - in.getLength() - 1;
-        if (bufferEnd < 0) {
+        // read the length first: the long form consumes more than one byte
+        int length = in.getLength();
+        if (length < 0 || length > in.available()) {
             throw new IOException("X509.ObjectIdentifier() -- not enough data");
         }
+
+        int bufferEnd = in.available() - length;
 
         initFromEncoding(in, bufferEnd);
     }
@@ -135,6 +138,9 @@ public class ObjectIdentifier implements Serializable {
      * @throws IOException In case of a data error
      */
     private void initFromEncoding(DERInputStream in, int bufferEnd) throws IOException {
+        if (in.available() <= bufferEnd) {
+            throw new IOException("X509.ObjectIdentifier() -- empty object identifier");
+        }
 
         // Now get the components ("sub IDs") one at a time. We fill a temporary buffer, resizing it as needed.
         boolean firstSubid = true;
@@ -192,12 +198,18 @@ public class ObjectIdentifier implements Serializable {
      * n.b. the only public interface is DEROutputStream.putOID()
      * 
      * @param out the stream
+     * @throws IllegalArgumentException if the object identifier has less than 2 components
      */
     void encode(DEROutputStream out) {
+        if (components == null || componentLen < 2) {
+            throw new IllegalArgumentException("X509.ObjectIdentifier() -- an object identifier needs at least 2 components");
+        }
+
         DEROutputStream bytes = new DEROutputStream();
         int i;
 
-        bytes.write((components[0] * 40) + components[1]);
+        // the first two components are combined into one sub identifier, which is encoded like the others (e.g. 2.999)
+        putComponent(bytes, (components[0] * 40) + components[1]);
         for (i = 2; i < componentLen; i++) {
             putComponent(bytes, components[i]);
         }

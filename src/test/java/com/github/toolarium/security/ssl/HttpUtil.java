@@ -95,13 +95,15 @@ public final class HttpUtil {
      */
     public String readRequestContent(BufferedReader reader, int contentLength) throws IOException {
         StringBuilder content = new StringBuilder();
-        LOG.debug("Request content length to read: " + contentLength);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Request content length to read: {}", contentLength);
+        }
         for (int i = 0; i < contentLength; i++) {
             content.append((char) reader.read());
         }
 
         if (LOG.isDebugEnabled()) {
-            LOG.debug("Read content: [" + content.toString() + "]");
+            LOG.debug("Read content: [{}]", content.toString());
         }
         
         return content.toString();

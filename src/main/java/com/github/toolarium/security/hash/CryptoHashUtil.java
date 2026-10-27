@@ -5,7 +5,7 @@
  */
 package com.github.toolarium.security.hash;
 
-import com.github.toolarium.security.util.CryptUtil;
+import com.github.toolarium.security.cryption.util.CryptionUtil;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import javax.crypto.Mac;
@@ -136,7 +136,7 @@ public final class CryptoHashUtil {
         }
         
         if (LOG.isDebugEnabled()) {
-            LOG.debug("Create " + CryptUtil.getInstance().getAlgorithmMessage(provider, algorithm) + " hash (" + in.length + " bytes)...");
+            LOG.debug("Create {} hash ({} bytes)...", CryptionUtil.getInstance().getAlgorithmMessage(provider, algorithm), in.length);
         }
 
         MessageDigest msgDigest = null;
@@ -166,13 +166,13 @@ public final class CryptoHashUtil {
             throw new GeneralSecurityException("Invalid input data!");
         }
 
-        if (inputKey == null) {
-            throw new GeneralSecurityException("Invalid key!");
+        if (inputKey == null || inputKey.length == 0) {
+            throw new GeneralSecurityException("Invalid key: the key must not be null or empty!");
         }
 
         String macAlgorithm = "HmacSHA256";
         if (LOG.isDebugEnabled()) {
-            LOG.debug("Create " + macAlgorithm + " hash (" + in.length + " bytes)...");
+            LOG.debug("Create {} hash ({} bytes)...", macAlgorithm, in.length);
         }
 
         Mac mac;

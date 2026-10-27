@@ -67,6 +67,19 @@ public final class CertificateUtilFactory {
         }
         return certificateGenerator;
     }
+
+
+    /**
+     * Get a new generator which is not shared with other callers.
+     *
+     * @param allowNonCaParent true to allow a parent certificate which is no CA certificate (behaviour of version 1.1.8
+     *     and older); the created chain is then rejected by a strict chain validation. The shared generator of
+     *     {@link #getGenerator()} does not allow it.
+     * @return the new generator
+     */
+    public ICertificateGenerator getGenerator(boolean allowNonCaParent) {
+        return new CertificateGenerator(allowNonCaParent);
+    }
     
     
     /**

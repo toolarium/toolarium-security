@@ -10,13 +10,13 @@ import com.github.toolarium.common.security.SecuredValueFactory;
 import com.github.toolarium.security.certificate.CertificateUtilFactory;
 import com.github.toolarium.security.certificate.dto.CertificateStore;
 import com.github.toolarium.security.keystore.dto.IKeyStoreConfiguration;
-import com.github.toolarium.security.keystore.dto.KeyStoreConfiguration;
 import com.github.toolarium.security.keystore.impl.SecurityManagerProviderImpl;
 import com.github.toolarium.security.keystore.util.KeyStoreUtil;
 import java.io.File;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
+import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.TrustManager;
@@ -113,7 +113,7 @@ public final class SecurityManagerProviderFactory {
     public ISecurityManagerProvider getSecurityManagerProvider(String keyStoreFile, String provider, char[] keyStorePassword, String certificateStoreAlias)
             throws GeneralSecurityException {
         // wrap immediately so the char[] is zeroed and we use the ISecuredSecretValue for all subsequent operations
-        return getSecurityManagerProvider(keyStoreFile, provider, SecuredValueFactory.getInstance().createSecret(keyStorePassword, "..."), certificateStoreAlias);
+        return getSecurityManagerProvider(keyStoreFile, provider, createSecret(keyStorePassword), certificateStoreAlias);
     }
 
 
@@ -159,7 +159,7 @@ public final class SecurityManagerProviderFactory {
     public ISecurityManagerProvider getSecurityManagerProvider(String keyStoreFile, String type, String provider, char[] keyStorePassword, String certificateStoreAlias)
             throws GeneralSecurityException {
         // wrap immediately so the char[] is zeroed and the ISecuredSecretValue is used for all subsequent operations
-        ISecuredSecretValue pwSecret = SecuredValueFactory.getInstance().createSecret(keyStorePassword, "...");
+        ISecuredSecretValue pwSecret = createSecret(keyStorePassword);
         try {
             final KeyStore keyStore = KeyStoreUtil.getInstance().readKeyStore(keyStoreFile, type, provider, pwSecret);
             return getSecurityManagerProvider(keyStore, pwSecret, certificateStoreAlias);
@@ -180,7 +180,7 @@ public final class SecurityManagerProviderFactory {
      */
     public ISecurityManagerProvider getSecurityManagerProvider(KeyStore keyStore, char[] keyStorePassword, String certificateStoreAlias)
             throws GeneralSecurityException {
-        return getSecurityManagerProvider(keyStore, SecuredValueFactory.getInstance().createSecret(keyStorePassword, "..."), certificateStoreAlias);
+        return getSecurityManagerProvider(keyStore, createSecret(keyStorePassword), certificateStoreAlias);
     }
 
 
@@ -197,7 +197,20 @@ public final class SecurityManagerProviderFactory {
             throws GeneralSecurityException {
         try {
             // get certificate
-            X509Certificate selfSignedCertificate = (X509Certificate)keyStore.getCertificate(certificateStoreAlias);
+            Certificate certificate = null;
+            if (certificateStoreAlias != null) {
+                certificate = keyStore.getCertificate(certificateStoreAlias);
+            }
+
+            if (certificate == null) {
+                throw new GeneralSecurityException("Could not find a certificate with the alias [" + certificateStoreAlias + "] in the key store!");
+            }
+
+            if (!(certificate instanceof X509Certificate)) {
+                throw new GeneralSecurityException("The certificate with the alias [" + certificateStoreAlias + "] is not a X509 certificate (" + certificate.getType() + ")!");
+            }
+
+            X509Certificate selfSignedCertificate = (X509Certificate) certificate;
 
             // get trust manager and add the self-signed certificate
             final KeyStore trustKeyStore = KeyStoreUtil.getInstance().addCertificateToTrustKeystore(certificateStoreAlias, selfSignedCertificate);
@@ -250,7 +263,9 @@ public final class SecurityManagerProviderFactory {
      */
     public ISecurityManagerProvider getSecurityManagerProvider(File trustKeyStoreFile, File keyStoreFile, ISecuredSecretValue keyStorePassword, String keyStoreType)
             throws GeneralSecurityException, IOException {
-        return getSecurityManagerProvider(new KeyStoreConfiguration(trustKeyStoreFile, null, keyStoreType, null, null), new KeyStoreConfiguration(keyStoreFile, null, keyStoreType, null, keyStorePassword)); 
+        KeyStore trustKeyStore = readTrustKeyStore(trustKeyStoreFile, keyStoreType, keyStorePassword);
+        KeyStore keyStore = KeyStoreUtil.getInstance().readKeyStore(keyStoreFile.getPath(), keyStoreType, null, keyStorePassword);
+        return new SecurityManagerProviderImpl(trustKeyStore, keyStore, keyStorePassword);
     }
 
 
@@ -266,7 +281,7 @@ public final class SecurityManagerProviderFactory {
     public ISecurityManagerProvider getSecurityManagerProvider(IKeyStoreConfiguration trustKeyStoreConfiguration, IKeyStoreConfiguration keyStoreConfiguration)
             throws GeneralSecurityException, IOException {
         KeyStore trustKeyStore = null; // default -> JAVA_HOME/jre/lib/security/cacerts
-        if (trustKeyStoreConfiguration != null) {
+        if (trustKeyStoreConfiguration != null && trustKeyStoreConfiguration.getKeyStoreFile() != null) {
             trustKeyStore = KeyStoreUtil.getInstance().readKeyStore(trustKeyStoreConfiguration.getKeyStoreFile().getPath(),
                                                                     trustKeyStoreConfiguration.getKeyStoreType(), 
                                                                     trustKeyStoreConfiguration.getKeyStoreProvider(),
@@ -279,5 +294,49 @@ public final class SecurityManagerProviderFactory {
                                                                     keyStoreConfiguration.getKeyStorePassword());
 
         return new SecurityManagerProviderImpl(trustKeyStore, keyStore, keyStoreConfiguration.getKeyStorePassword());
+    }
+
+
+    /**
+     * Read the trust key store. If a password is given, it is used to read and verify the integrity of the trust key store.
+     * If the trust key store can not be read with the password (e.g. it has another password), it is read without
+     * integrity check and a warning is logged.
+     *
+     * @param trustKeyStoreFile the trust key store file or null to use the default
+     * @param keyStoreType the key store type or null
+     * @param password the password or null
+     * @return the trust key store or null to use the default
+     * @throws IOException in case of a file read error
+     * @throws GeneralSecurityException in case of error
+     */
+    private KeyStore readTrustKeyStore(File trustKeyStoreFile, String keyStoreType, ISecuredSecretValue password) throws GeneralSecurityException, IOException {
+        if (trustKeyStoreFile == null) {
+            // default -> JAVA_HOME/jre/lib/security/cacerts
+            return null;
+        }
+
+        if (password != null) {
+            try {
+                return KeyStoreUtil.getInstance().readKeyStore(trustKeyStoreFile.getPath(), keyStoreType, null, password);
+            } catch (IOException e) {
+                LOG.warn("Could not read the trust key store [{}] with the password, it is read without integrity check: {}", trustKeyStoreFile, e.getMessage());
+            }
+        }
+
+        return KeyStoreUtil.getInstance().readKeyStore(trustKeyStoreFile.getPath(), keyStoreType, null, null);
+    }
+
+
+    /**
+     * Create a secret of a password. The given char array is zeroed.
+     *
+     * @param password the password or null
+     * @return the secret or null if no password is given
+     */
+    private ISecuredSecretValue createSecret(char[] password) {
+        if (password == null) {
+            return null;
+        }
+        return SecuredValueFactory.getInstance().createSecret(password, "...");
     }
 }

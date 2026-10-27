@@ -70,7 +70,7 @@ public final class ChallengeResponseUtil {
         }
         
         if (LOG.isDebugEnabled()) {
-            LOG.debug("Generating challenge (" + size + " bytes)...");
+            LOG.debug("Generating challenge ({} bytes)...", size);
         }
 
         byte[] challange = RandomGenerator.getInstance().nextBytes(size);
@@ -108,10 +108,6 @@ public final class ChallengeResponseUtil {
         if (LOG.isDebugEnabled()) {
             LOG.debug("Checking response...");
         }
-        
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("  Challenge: " + challenge.length + " bytes");
-        }
 
         // check parameters
         checkParameter(algorithm);
@@ -119,8 +115,11 @@ public final class ChallengeResponseUtil {
         checkParameter(challenge);
         checkParameter(response);
 
-        Decoder decoder = Base64.getDecoder();
-        return SignatureUtil.getInstance().verify(provider, algorithm, publicKey, decoder.decode(challenge), decoder.decode(response));
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("  Challenge: {} bytes", challenge.length);
+        }
+
+        return SignatureUtil.getInstance().verify(provider, algorithm, publicKey, decodeBase64(challenge, "challenge"), decodeBase64(response, "response"));
     }
 
 
@@ -163,6 +162,24 @@ public final class ChallengeResponseUtil {
     }
 
     
+    /**
+     * Decode Base64 encoded data.
+     *
+     * @param data the Base64 encoded data
+     * @param name the name of the data for the error message
+     * @return the decoded data
+     * @throws GeneralSecurityException if the data is not valid Base64
+     */
+    private byte[] decodeBase64(byte[] data, String name) throws GeneralSecurityException {
+        Decoder decoder = Base64.getDecoder();
+        try {
+            return decoder.decode(data);
+        } catch (IllegalArgumentException e) {
+            throw new GeneralSecurityException("Invalid Base64 encoded " + name + "!", e);
+        }
+    }
+
+
     /**
      * Checks a given object
      * 

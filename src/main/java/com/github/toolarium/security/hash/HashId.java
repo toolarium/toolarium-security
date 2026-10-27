@@ -19,7 +19,7 @@ import java.util.stream.Collectors;
  * This algorithm tries to satisfy the following requirements: Hashes must be unique and decryptable.
  * They should be able to contain more than one integer (so you can use them in complex or clustered systems).
  * You should be able to specify minimum hash length.
- * Hashes should not contain basic English curse words (since they are meant to appear in public places - like the URL).
+ * Hashes should not contain basic English curse words (since they are meant to appear in public places, like the URL).
  * Instead of showing items as 1, 2, or 3, you could show them as U6dc, u87U, and HMou. You don't have to store these hashes 
  * in the database, but can encrypt + decrypt on the fly.
  * All (long) integers need to be greater than or equal to zero.
@@ -31,11 +31,11 @@ public final class HashId {
 
     private static final int[] PRIMES = {2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43 };
     private static final int[] SEPS_INDICES = {0, 4, 8, 12 };
-    private String salt = "";
-    private String alphabet = "";
-    private int minHashLength;
-    private List<Character> seps;
-    private List<Character> guards;
+    private final String salt;
+    private final String alphabet;
+    private final int minHashLength;
+    private final List<Character> seps;
+    private final List<Character> guards;
 
 
     /**
@@ -47,33 +47,37 @@ public final class HashId {
      * @throws IllegalArgumentException In case of an invalid input
      */
     private HashId(String salt, int minHashLength, String alphabet) {
-        if (alphabet == null || alphabet.isBlank()) {
+        if (alphabet == null || alphabet.trim().isEmpty()) {
             throw new IllegalArgumentException("alphabet must not be empty");
         }
         
         if (salt != null) {
             this.salt = salt;
+        } else {
+            this.salt = "";
         }
-        
+
         if (minHashLength > 0) {
             this.minHashLength = minHashLength;
+        } else {
+            this.minHashLength = 0;
         }
 
         //this.alphabet = join(new LinkedHashSet<String>(StringUtil.getInstance().splitAsList(alphabet, "")), "");
         List<String> list = StringUtil.getInstance().splitAsList(alphabet, "");
         list = list.stream().distinct().collect(Collectors.toList());
-        this.alphabet = join(list, "");
-        if (this.alphabet.length() < 4) {
+        String uniqueAlphabet = join(list, "");
+        if (uniqueAlphabet.length() < 4) {
             throw new IllegalArgumentException("Alphabet must contain at least 4 unique characters.");
         }
-        
+
         seps = new ArrayList<Character>();
         guards = new ArrayList<Character>();
         for (int prime : PRIMES) {
-            if (prime < this.alphabet.length()) {
-                char c = this.alphabet.charAt(prime - 1);
+            if (prime < uniqueAlphabet.length()) {
+                char c = uniqueAlphabet.charAt(prime - 1);
                 seps.add(c);
-                this.alphabet = this.alphabet.replace(c, ' ');
+                uniqueAlphabet = uniqueAlphabet.replace(c, ' ');
             }
         }
 
@@ -84,7 +88,7 @@ public final class HashId {
             }
         }
 
-        this.alphabet = consistentShuffle(this.alphabet.replaceAll(" ", ""), this.salt);
+        this.alphabet = consistentShuffle(uniqueAlphabet.replaceAll(" ", ""), this.salt);
     }
     
     

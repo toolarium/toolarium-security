@@ -189,8 +189,10 @@ public class SSLContextFactoryTest {
         
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         HttpHeaders headers = response.headers();
-        headers.map().forEach((k, v) -> LOG.debug(k + ":" + v));
-        LOG.debug("Response " + response.statusCode() + ":\n" + response.body());
+        if (LOG.isDebugEnabled()) {
+            headers.map().forEach((k, v) -> LOG.debug("{}:{}", k, v));
+            LOG.debug("Response {}:\n{}", response.statusCode(), response.body());
+        }
         assertEquals(requestText, response.body());
         
         Thread.sleep(100L);
@@ -242,7 +244,7 @@ public class SSLContextFactoryTest {
 
 
     /**
-     * Test createSslContext with an entirely invalid cipher suite list — should not throw;
+     * Test createSslContext with an entirely invalid cipher suite list: should not throw;
      * unknown suites are warned and skipped, context is still returned.
      *
      * @throws GeneralSecurityException in case of error
@@ -284,7 +286,7 @@ public class SSLContextFactoryTest {
 
 
     /**
-     * Test applyCipherSuites null and empty guards — engine enabled list must remain unchanged
+     * Test applyCipherSuites null and empty guards: engine enabled list must remain unchanged
      *
      * @throws GeneralSecurityException in case of error
      */

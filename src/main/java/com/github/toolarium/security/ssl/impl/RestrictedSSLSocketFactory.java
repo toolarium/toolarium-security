@@ -14,7 +14,7 @@ import javax.net.ssl.SSLSocketFactory;
 
 
 /**
- * An {@link SSLSocketFactory} which restricts the enabled cipher suites of every created socket.
+ * An {@link SSLSocketFactory} which restricts the enabled cipher suites and protocols (TLSv1.2 and TLSv1.3) of every created socket.
  *
  * @author patrick
  */
@@ -28,10 +28,11 @@ public class RestrictedSSLSocketFactory extends SSLSocketFactory {
      *
      * @param delegate the socket factory to wrap
      * @param cipherSuites the cipher suites to enable, they must be supported by the delegate
+     * @throws IllegalArgumentException in case the cipher suites are null, empty or contain a null element
      */
     public RestrictedSSLSocketFactory(SSLSocketFactory delegate, String[] cipherSuites) {
         this.delegate = delegate;
-        this.cipherSuites = cipherSuites.clone();
+        this.cipherSuites = RestrictionSupport.validateCipherSuites(cipherSuites);
     }
 
 
@@ -117,14 +118,28 @@ public class RestrictedSSLSocketFactory extends SSLSocketFactory {
 
 
     /**
-     * Restrict the enabled cipher suites of the socket
+     * Restrict the enabled cipher suites and protocols of the socket. In case the restriction fails the socket is closed.
      *
      * @param socket the socket
      * @return the socket
      */
     private Socket restrict(Socket socket) {
         if (socket instanceof SSLSocket) {
-            ((SSLSocket) socket).setEnabledCipherSuites(cipherSuites.clone());
+            SSLSocket sslSocket = (SSLSocket) socket;
+            try {
+                sslSocket.setEnabledCipherSuites(cipherSuites.clone());
+                String[] protocols = RestrictionSupport.selectProtocols(sslSocket.getSupportedProtocols());
+                if (protocols.length > 0) {
+                    sslSocket.setEnabledProtocols(protocols);
+                }
+            } catch (RuntimeException ex) {
+                try {
+                    sslSocket.close();
+                } catch (IOException closeEx) {
+                    ex.addSuppressed(closeEx);
+                }
+                throw ex;
+            }
         }
         return socket;
     }

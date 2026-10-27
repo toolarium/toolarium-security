@@ -55,7 +55,9 @@ public class PKIConfigurationUtilTest {
         // create private key
         final PrivateKey privateKey = PKIUtil.getInstance().generateKeyPair(RSA, 2048).getPrivate();
         final String privateKeyStr = KeyConverterFactory.getInstance().getConverter(RSA).formatPrivateKey(privateKey);
-        LOG.debug("Private key (log this never on any environemtent, its just a sample):" + NL + privateKeyStr);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Private key (log this never on any environemtent, its just a sample):{}{}", NL, privateKeyStr);
+        }
         
         // ---------------------------------------------------
         // sample for services which need a private key: 
@@ -91,7 +93,9 @@ public class PKIConfigurationUtilTest {
         // create private key
         final PublicKey publicKey = PKIUtil.getInstance().generateKeyPair(RSA, 2048).getPublic();
         final String publicKeyStr = KeyConverterFactory.getInstance().getConverter(RSA).formatPublicKey(publicKey);
-        LOG.debug("Public key (log this never on any environemtent, its just a sample):" + NL + publicKeyStr);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Public key (log this never on any environemtent, its just a sample):{}{}", NL, publicKeyStr);
+        }
         
         // ---------------------------------------------------
         // sample for services which need a public key: 
@@ -129,7 +133,9 @@ public class PKIConfigurationUtilTest {
         
         // convert to string
         final String certifivcateStr = CertificateUtilFactory.getInstance().getConverter().formatPKCS7(list.stream().toArray(X509Certificate[]::new));
-        LOG.debug("Certificate chain (log this never on any environemtent, its just a sample):" + NL + certifivcateStr);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Certificate chain (log this never on any environemtent, its just a sample):{}{}", NL, certifivcateStr);
+        }
         
         // ---------------------------------------------------
         // sample for services which need a trust store: 
@@ -138,7 +144,9 @@ public class PKIConfigurationUtilTest {
         
         // ---------------------------------------------------
         
-        LOG.debug("Keystore: type=" + keyStore.getType() + ", provider: " + keyStore.getProvider());
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Keystore: type={}, provider: {}", keyStore.getType(), keyStore.getProvider());
+        }
         
         List<X509Certificate> validCertificates = CertificateUtilFactory.getInstance().getFilter().filterValid(list);
         assertEquals(3, validCertificates.size());
@@ -182,7 +190,9 @@ public class PKIConfigurationUtilTest {
         
         // convert to string
         final String certifivcateStr = CertificateUtilFactory.getInstance().getConverter().formatPKCS7(list.stream().toArray(X509Certificate[]::new));
-        LOG.debug("==>" + certifivcateStr);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("==>{}", certifivcateStr);
+        }
         
         // ---------------------------------------------------
         // sample for services which need a trust store: 
@@ -191,7 +201,9 @@ public class PKIConfigurationUtilTest {
         
         // ---------------------------------------------------
         
-        LOG.debug("Keystore: type=" + trustKeyStore.getType() + ", provider: " + trustKeyStore.getProvider());
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Keystore: type={}, provider: {}", trustKeyStore.getType(), trustKeyStore.getProvider());
+        }
         
         List<X509Certificate> validCertificates = CertificateUtilFactory.getInstance().getFilter().filterValid(list);
         assertEquals(3, validCertificates.size());

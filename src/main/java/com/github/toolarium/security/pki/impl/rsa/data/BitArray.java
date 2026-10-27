@@ -83,7 +83,9 @@ public class BitArray {
          */
         repn = new byte[repLength]; 
         System.arraycopy(a, 0, repn, 0, repLength);
-        repn[repn.length - 1] = (byte) (repn[repn.length - 1] & bitMask);
+        if (repLength > 0) { // an empty bit array has no last byte
+            repn[repn.length - 1] = (byte) (repn[repn.length - 1] & bitMask);
+        }
     }
 
 
@@ -260,8 +262,13 @@ public class BitArray {
             }
         }
 
-        // in last byte of repn, use only the valid bits
-        for (int i = BITS_PER_UNIT * (repn.length - 1); i < length; i++) {
+        // in last byte of repn, use only the valid bits (an empty bit array has no last byte)
+        int lastByteStart = 0;
+        if (repn.length > 0) {
+            lastByteStart = BITS_PER_UNIT * (repn.length - 1);
+        }
+
+        for (int i = lastByteStart; i < length; i++) {
             if (get(i)) { // out.write(get(i) ? '1' : '0');
                 out.write('1');
             } else {

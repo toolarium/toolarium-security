@@ -6,6 +6,7 @@
 package com.github.toolarium.security.keystore.util;
 
 import com.github.toolarium.common.security.ISecuredSecretValue;
+import com.github.toolarium.common.security.SecureSecret;
 import com.github.toolarium.security.certificate.CertificateUtilFactory;
 import com.github.toolarium.security.certificate.dto.CertificateStore;
 import com.github.toolarium.security.pki.util.PKIUtil;
@@ -13,14 +14,16 @@ import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.KeyStore;
@@ -31,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
@@ -46,6 +50,7 @@ import org.slf4j.LoggerFactory;
 public final class KeyStoreUtil {
     private static final String PKCS12 = "PKCS12";
     private static final Logger LOG = LoggerFactory.getLogger(KeyStoreUtil.class);
+    private static final ConcurrentHashMap<String, Object> FILE_LOCKS = new ConcurrentHashMap<String, Object>();
     private volatile KeyStore cachedDefaultTrustKeyStore;
 
 
@@ -108,11 +113,9 @@ public final class KeyStoreUtil {
         
         keyStore.load(null, pw);
         
-        if (fileName != null && !fileName.isBlank()) {
-            // store away the keystore.
-            try (FileOutputStream fos = new FileOutputStream(fileName)) {
-                keyStore.store(fos, pw);
-            }
+        if (fileName != null && !fileName.trim().isEmpty()) {
+            // store away the keystore (atomic and only accessible by the owner)
+            writeKeyStoreFile(keyStore, fileName, pw);
         }
         
         return keyStore;
@@ -152,7 +155,7 @@ public final class KeyStoreUtil {
      * Read a file as key store
      *
      * @param fileName the file to read
-     * @param type the key store type
+     * @param type the key store type or null to use the default type ({@link KeyStore#getDefaultType()})
      * @param provider the provider or null
      * @param password the password or null
      * @return the key pairs
@@ -163,12 +166,17 @@ public final class KeyStoreUtil {
         if (fileName == null) {
             return null;
         }
-        
+
+        String keyStoreType = type;
+        if (keyStoreType == null) {
+            keyStoreType = KeyStore.getDefaultType();
+        }
+
         KeyStore ks;
         if (provider != null) {
-            ks = KeyStore.getInstance(type, provider);
+            ks = KeyStore.getInstance(keyStoreType, provider);
         } else {
-            ks = KeyStore.getInstance(type);
+            ks = KeyStore.getInstance(keyStoreType);
         }
         
         try (InputStream in = new BufferedInputStream(new FileInputStream(new File(fileName)))) {
@@ -225,7 +233,7 @@ public final class KeyStoreUtil {
      * Writes a PKCS12 file as key store
      *
      * @param fileName the file to read
-     * @param alias the alias in the PKCS12 file or null
+     * @param alias the alias in the PKCS12 file
      * @param privateKey the private key
      * @param certificates the certificate chain
      * @param password the password or null
@@ -243,7 +251,7 @@ public final class KeyStoreUtil {
      *
      * @param fileName the file to read
      * @param provider the provider or null
-     * @param alias the alias in the PKCS12 file or null
+     * @param alias the alias in the PKCS12 file
      * @param privateKey the private key
      * @param certificates the certificate chain
      * @param password the password or null
@@ -255,12 +263,41 @@ public final class KeyStoreUtil {
         if (privateKey == null) {
             throw new GeneralSecurityException("Invalid private key!");
         }
-        
+
+        if (fileName == null) {
+            throw new IOException("Invalid file name!");
+        }
+
+        if (alias == null) {
+            throw new GeneralSecurityException("Invalid alias!");
+        }
+
+        // the read-modify-write of the same file is serialized within the JVM, otherwise concurrent updates are lost
+        synchronized (getFileLock(fileName)) {
+            return updatePKCS12KeyStore(fileName, provider, alias, privateKey, certificates, password);
+        }
+    }
+
+
+    /**
+     * Adds the private key and certificate chain to a PKCS12 file: an existing file is read and updated, otherwise a new file is created.
+     *
+     * @param fileName the file to update
+     * @param provider the provider or null
+     * @param alias the alias in the PKCS12 file
+     * @param privateKey the private key
+     * @param certificates the certificate chain
+     * @param password the password or null
+     * @return the written key store
+     * @throws GeneralSecurityException in case of error
+     * @throws IOException in case of error
+     */
+    private KeyStore updatePKCS12KeyStore(String fileName, String provider, String alias, PrivateKey privateKey, Certificate[] certificates, ISecuredSecretValue password) throws GeneralSecurityException, IOException {
         KeyStore ks = null;
         boolean alreadyLoaded = false;
         if (new File(fileName).exists()) {
             // an existing keystore which can not be read (e.g. wrong password) is not overwritten, otherwise its keys are lost
-            LOG.info("Read existing keystore [" + fileName + "].");
+            LOG.info("Read existing keystore [{}].", fileName);
             try {
                 ks = readPKCS12KeyStore(fileName, provider, password);
             } catch (IOException e) {
@@ -273,7 +310,7 @@ public final class KeyStoreUtil {
 
         if (ks == null) {
             if (LOG.isDebugEnabled()) {
-                LOG.debug("Create new keystore [" + fileName + "].");
+                LOG.debug("Create new keystore [{}].", fileName);
             }
             if (provider == null) {
                 ks = KeyStore.getInstance(PKCS12);
@@ -287,7 +324,7 @@ public final class KeyStoreUtil {
         }
 
         if (new File(fileName).exists()) {
-            LOG.info("Overwriting existing keystore [" + fileName + "].");
+            LOG.info("Overwriting existing keystore [{}].", fileName);
         }
 
         final boolean initRequired = !alreadyLoaded;
@@ -298,11 +335,23 @@ public final class KeyStoreUtil {
             }
             finalKs.setKeyEntry(alias, privateKey, chars, certificates);
             if (LOG.isDebugEnabled()) {
-                LOG.debug("Write keystore [" + fileName + "].");
+                LOG.debug("Write keystore [{}].", fileName);
             }
             writeKeyStoreFile(finalKs, fileName, chars);
         });
         return ks;
+    }
+
+
+    /**
+     * Get the lock object of a file. The same canonical file path always returns the same lock object within the JVM.
+     *
+     * @param fileName the file name
+     * @return the lock object
+     * @throws IOException in case the canonical path can not be resolved
+     */
+    private static Object getFileLock(String fileName) throws IOException {
+        return FILE_LOCKS.computeIfAbsent(new File(fileName).getCanonicalPath(), key -> new Object());
     }
 
 
@@ -328,9 +377,12 @@ public final class KeyStoreUtil {
         Path tempFile = Files.createTempFile(directory, target.getFileName().toString(), ".tmp");
         boolean moved = false;
         try {
-            try (OutputStream out = new BufferedOutputStream(Files.newOutputStream(tempFile))) {
+            try (FileChannel channel = FileChannel.open(tempFile, StandardOpenOption.WRITE);
+                 OutputStream out = new BufferedOutputStream(Channels.newOutputStream(channel))) {
                 keyStore.store(out, password);
                 out.flush();
+                // the content must be on the disk before the move, otherwise a crash can leave an empty key store
+                channel.force(true);
             }
 
             try {
@@ -414,7 +466,9 @@ public final class KeyStoreUtil {
 
     
     /**
-     * Get default trust keystore
+     * Get default trust keystore. The returned keystore is shared in the JVM and read only: a change throws a
+     * {@link java.security.KeyStoreException}. To change it on purpose use
+     * {@link #addCertificateToTrustKeystore(String, X509Certificate[], boolean)}.
      *
      * @return the trust keystore
      * @throws GeneralSecurityException in case of error
@@ -434,17 +488,21 @@ public final class KeyStoreUtil {
 
             final KeyStore trustManagerKeyStore = KeyStoreUtil.getInstance().createKeyStore(null);
             X509TrustManager defaultTm = KeyStoreUtil.getInstance().getDefaultX509TrustManager();
+            if (defaultTm == null) {
+                throw new GeneralSecurityException("No default X509 trust manager found!");
+            }
+
             X509Certificate[] trustedIssuers = defaultTm.getAcceptedIssuers();
             if (trustedIssuers != null) {
                 int i = 1;
 
                 if (LOG.isDebugEnabled()) {
-                    LOG.debug("Init new default trust stire with default trusted issuers: " + trustedIssuers.length);
+                    LOG.debug("Init new default trust stire with default trusted issuers: {}", trustedIssuers.length);
                 }
 
                 for (X509Certificate trustedIssuer : trustedIssuers) {
                     // add the key manager store in the trust store
-                    trustManagerKeyStore.setCertificateEntry("cert" + i++, trustedIssuer);
+                    trustManagerKeyStore.setCertificateEntry(getFreeAlias(trustManagerKeyStore, "cert" + i++, trustedIssuer), trustedIssuer);
 
                     //if (LOG.isDebugEnabled()) {
                     //    PKIUtil.getInstance().processCertificate(LOG::debug, "Add certificate to trust store:", trustedIssuers);
@@ -452,8 +510,10 @@ public final class KeyStoreUtil {
                 }
             }
 
-            cachedDefaultTrustKeyStore = trustManagerKeyStore;
-            return trustManagerKeyStore;
+            // the shared keystore is read only: a caller can not change the trust of the whole JVM by accident
+            result = new ReadOnlyKeyStore(trustManagerKeyStore);
+            cachedDefaultTrustKeyStore = result;
+            return result;
         }
     }
 
@@ -509,15 +569,15 @@ public final class KeyStoreUtil {
     public KeyStore addCertificateToTrustKeystore(String alias, X509Certificate[] certificateChain, boolean global) throws GeneralSecurityException, IOException {
         if (!global) {
             if (LOG.isDebugEnabled()) {
-                LOG.debug("Add certificate to a copy of the default trust store with alias " + alias + "...");
+                LOG.debug("Add certificate to a copy of the default trust store with alias {}...", alias);
             }
 
             return addCertificateToKeystore(copyTrustKeyStore(getDefaultTrustKeyStore()), alias, certificateChain);
         }
 
         synchronized (this) {
-            LOG.info("Add certificate to the shared default trust store with alias " + alias + " (JVM wide).");
-            KeyStore trustKeyStore = addCertificateToKeystore(copyTrustKeyStore(getDefaultTrustKeyStore()), alias, certificateChain);
+            LOG.info("Add certificate to the shared default trust store with alias {} (JVM wide).", alias);
+            KeyStore trustKeyStore = new ReadOnlyKeyStore(addCertificateToKeystore(copyTrustKeyStore(getDefaultTrustKeyStore()), alias, certificateChain));
             cachedDefaultTrustKeyStore = trustKeyStore;
             return trustKeyStore;
         }
@@ -546,10 +606,13 @@ public final class KeyStoreUtil {
                 List<X509Certificate> list = new ArrayList<X509Certificate>();
                 list.addAll(CertificateUtilFactory.getInstance().getFilter().filterValid(Arrays.asList(certificateChain)));
                 list.addAll(CertificateUtilFactory.getInstance().getFilter().filterNotYedValid(Arrays.asList(certificateChain)));
+                for (X509Certificate expiredCertificate : CertificateUtilFactory.getInstance().getFilter().filterExpired(Arrays.asList(certificateChain))) {
+                    LOG.warn("Expired certificate [{}] (expired {}) is not added to the key store (alias {}).", expiredCertificate.getSubjectX500Principal(), expiredCertificate.getNotAfter(), alias);
+                }
 
                 for (int i = 0; i < list.size(); i++) {
-                    // add the key manager store in the store
-                    keyStore.setCertificateEntry(alias + i, list.get(i));
+                    // add the key manager store in the store; an existing entry with a different certificate is not overwritten
+                    keyStore.setCertificateEntry(getFreeAlias(keyStore, alias + i, list.get(i)), list.get(i));
                     if (LOG.isDebugEnabled()) {
                         PKIUtil.getInstance().processCertificate(LOG::debug, "Add certificate to key store:", list.get(i));
                     }
@@ -558,6 +621,28 @@ public final class KeyStoreUtil {
         }
 
         return keyStore;
+    }
+
+
+    /**
+     * Get a free alias for a certificate entry: the alias itself if it is not used or if it is a certificate entry with the
+     * same certificate, otherwise the alias with the suffix _1, _2, ... An existing entry is never overwritten with a
+     * different certificate.
+     *
+     * @param keyStore the key store
+     * @param alias the alias
+     * @param certificate the certificate to add
+     * @return the alias to use
+     * @throws GeneralSecurityException In case of general security exception
+     */
+    private String getFreeAlias(KeyStore keyStore, String alias, Certificate certificate) throws GeneralSecurityException {
+        String result = alias;
+        int counter = 1;
+        while (keyStore.containsAlias(result) && !(keyStore.isCertificateEntry(result) && certificate.equals(keyStore.getCertificate(result)))) {
+            result = alias + "_" + counter;
+            counter++;
+        }
+        return result;
     }
 
 
@@ -598,19 +683,25 @@ public final class KeyStoreUtil {
 
     /**
      * Execute a secret action using the chars from the given secret value.
-     * If the secret is null or has no value, the action is invoked with a null char array.
+     * If the secret is null, the action is invoked with a null char array.
      *
      * @param secret the secret value
      * @param action the action to run
-     * @throws GeneralSecurityException in case of error
+     * @throws GeneralSecurityException in case of error or if the secret is destroyed
      * @throws IOException in case of an I/O error
      */
     private static void withSecret(ISecuredSecretValue secret, SecretAction action) throws GeneralSecurityException, IOException {
-        if (secret == null || secret.getValue() == null) {
+        if (secret == null) {
             action.run(null);
         } else {
+            // read the value only once: a destroyed secret must not be used as "no password"
+            SecureSecret value = secret.getValue();
+            if (value == null || value.isDestroyed()) {
+                throw new GeneralSecurityException("The password is destroyed!");
+            }
+
             try {
-                secret.getValue().useChars(chars -> {
+                value.useChars(chars -> {
                     try {
                         action.run(chars);
                     } catch (GeneralSecurityException | IOException e) {

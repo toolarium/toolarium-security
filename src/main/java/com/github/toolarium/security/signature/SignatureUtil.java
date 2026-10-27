@@ -5,8 +5,8 @@
  */
 package com.github.toolarium.security.signature;
 
+import com.github.toolarium.security.cryption.util.CryptionUtil;
 import com.github.toolarium.security.pki.util.PKIUtil;
-import com.github.toolarium.security.util.CryptUtil;
 import java.security.GeneralSecurityException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
@@ -81,7 +81,7 @@ public final class SignatureUtil {
      */
     public boolean verify(String provider, String algorithm, PublicKey publicKey, byte[] dataToVerify, byte[] dataToCompareWith) throws GeneralSecurityException {
         if (LOG.isDebugEnabled()) {
-            LOG.debug("Validate response (" + CryptUtil.getInstance().getAlgorithmMessage(provider, algorithm) + ")...");
+            LOG.debug("Validate response ({})...", CryptionUtil.getInstance().getAlgorithmMessage(provider, algorithm));
         }
 
         if (algorithm == null) {
@@ -89,7 +89,7 @@ public final class SignatureUtil {
         }
         
         if (publicKey == null) {
-            throw new GeneralSecurityException("Invalid PrivateKey!");
+            throw new GeneralSecurityException("Invalid PublicKey!");
         }
         
         if (dataToVerify == null) {
@@ -173,7 +173,7 @@ public final class SignatureUtil {
      */
     public byte[] sign(String provider, String algorithm, PrivateKey privateKey, byte[] data) throws GeneralSecurityException {
         if (LOG.isDebugEnabled()) {
-            LOG.debug("Sign data (" + CryptUtil.getInstance().getAlgorithmMessage(provider, algorithm) + ")...");
+            LOG.debug("Sign data ({})...", CryptionUtil.getInstance().getAlgorithmMessage(provider, algorithm));
         }
         
         if (algorithm == null) {

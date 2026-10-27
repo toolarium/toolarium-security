@@ -5,7 +5,6 @@
  */
 package com.github.toolarium.security.certificate.impl;
 
-import com.github.toolarium.security.certificate.CertificateUtilFactory;
 import com.github.toolarium.security.certificate.ICertificateGenerator;
 import com.github.toolarium.security.certificate.dto.CertificateStore;
 import com.github.toolarium.security.pki.util.PKIUtil;
@@ -19,7 +18,6 @@ import java.security.cert.X509Certificate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
-import java.util.Collections;
 import java.util.Date;
 import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.x500.X500Name;
@@ -57,14 +55,27 @@ public class CertificateGenerator implements ICertificateGenerator {
     private static final BouncyCastleProvider BC_PROVIDER = new BouncyCastleProvider();
     private static final SecureRandom SERIAL_RANDOM = new SecureRandom();
     private static final int SERIAL_NUMBER_BITS = 128;
+    private final boolean allowNonCaParent;
 
-    
+
     /**
      * Constructor for CertificateGenerator
      */
     public CertificateGenerator() {
-        // NOP
+        this(false);
     }
+
+
+    /**
+     * Constructor for CertificateGenerator
+     *
+     * @param allowNonCaParent true to allow a parent certificate which is no CA certificate (behaviour of version 1.1.8
+     *     and older); the created chain is then rejected by a strict chain validation
+     */
+    public CertificateGenerator(boolean allowNonCaParent) {
+        this.allowNonCaParent = allowNonCaParent;
+    }
+
 
 
     /**
@@ -155,6 +166,23 @@ public class CertificateGenerator implements ICertificateGenerator {
                                                final Date startDate,
                                                final int inputValidityDays,
                                                final boolean isCa) throws GeneralSecurityException {
+        if (keyPair == null || keyPair.getPublic() == null) {
+            throw new GeneralSecurityException("Invalid key pair (null)!");
+        }
+        if (dn == null) {
+            throw new GeneralSecurityException("Invalid dn (null)!");
+        }
+        if (startDate == null) {
+            throw new GeneralSecurityException("Invalid start date (null)!");
+        }
+
+        boolean hasParent = parent != null && parent.getCertificates() != null && parent.getCertificates().length > 0;
+        if (hasParent) {
+            verifyParent(parent);
+        } else if (keyPair.getPrivate() == null) {
+            throw new GeneralSecurityException("Invalid key pair, the private key to sign the self-signed certificate is missing!");
+        }
+
         try {
             int validityDays = inputValidityDays;
             LocalDateTime maxDate;
@@ -184,7 +212,7 @@ public class CertificateGenerator implements ICertificateGenerator {
             } else {
                 //PKIUtil.getInstance().logCertificate("Parent certificates:", parent.getCertificates());
                 privateKeySigner = parent.getKeyPair().getPrivate();
-                // preserve exact DER encoding from the parent cert's subject — byte-level match required by PKIX path validation
+                // preserve exact DER encoding from the parent cert's subject: byte-level match required by PKIX path validation
                 issuer = X500Name.getInstance(ASN1Sequence.getInstance(parent.getCertificates()[0].getSubjectX500Principal().getEncoded()));
             }
             
@@ -195,9 +223,9 @@ public class CertificateGenerator implements ICertificateGenerator {
             final SubjectPublicKeyInfo publicKeyInfo = SubjectPublicKeyInfo.getInstance(ASN1Sequence.getInstance(keyPair.getPublic().getEncoded()));
             final Date notBeforedate = localDateTimeToDate(dateToLocalDateTime(startDate).with(LocalTime.MIN)); // start of the day
             final Date notAfter = localDateTimeToDate(maxDate.with(LocalTime.MAX)); // end of the day;
-            // build SAN extension: include localhost if dnName is different
+            // build SAN extension: localhost is only added if no alternative name (host name) is given
             GeneralName[] sanNames;
-            if ("localhost".equals(dnName)) {
+            if (alternativeDn != null || "localhost".equals(dnName)) {
                 sanNames = new GeneralName[] {new GeneralName(GeneralName.dNSName, dnName)};
             } else {
                 sanNames = new GeneralName[] {new GeneralName(GeneralName.dNSName, dnName), new GeneralName(GeneralName.dNSName, "localhost")};
@@ -250,7 +278,7 @@ public class CertificateGenerator implements ICertificateGenerator {
             ContentSigner signer = new JcaContentSignerBuilder(signatureAlgorithm).setProvider(BC_PROVIDER).build(privateKeySigner);
             X509CertificateHolder holder = builder.build(signer);
             // use the default JDK CertificateFactory (no BC provider) so the resulting X509Certificate
-            // is a JDK-native instance — required for compatibility with the JDK's PKIX CertPathValidator.
+            // is a JDK-native instance, required for compatibility with the JDK's PKIX CertPathValidator.
             X509Certificate cert = new JcaX509CertificateConverter().getCertificate(holder);
             
             int size = 1;
@@ -268,12 +296,19 @@ public class CertificateGenerator implements ICertificateGenerator {
                 //chain[1] = parent.getCertificates()[parentChainLength - 1];
             }
 
-            // check the signatures only: the generator must be able to create expired or not yet valid certificates
-            CertificateVerifier verifier = CertificateUtilFactory.getInstance().createVerifier(false);
-            verifier.setStrictChainValidation(false);
-            // the root of a generated chain is trusted by definition
-            verifier.setTrustedCertificates(Collections.singleton(chain[chain.length - 1]));
-            verifier.verifyCertificateChain(LOG::info, chain);
+            // check the signature of the new certificate only: the parent chain is not changed and the generator
+            // must be able to create expired or not yet valid certificates
+            if (hasParent) {
+                cert.verify(parent.getCertificates()[0].getPublicKey());
+            } else {
+                cert.verify(keyPair.getPublic());
+            }
+
+            LOG.info("Created certificate '{}' (serial {}), issued by '{}', valid from {} to {}.",
+                     cert.getSubjectX500Principal().getName(), cert.getSerialNumber(), cert.getIssuerX500Principal().getName(), cert.getNotBefore(), cert.getNotAfter());
+            if (LOG.isDebugEnabled()) {
+                PKIUtil.getInstance().processCertificate(LOG::debug, "Created certificate chain: " + chain.length + " certificate(s)...", chain);
+            }
             return new CertificateStore(keyPair, chain);
         } catch (OperatorCreationException | IOException ex) {
             throw new GeneralSecurityException(ex.getMessage(), ex);
@@ -281,6 +316,31 @@ public class CertificateGenerator implements ICertificateGenerator {
     }
 
     
+
+    /**
+     * Verify that the parent can issue certificates: its certificate must be a CA (or a self-signed root of version 1),
+     * unless a parent which is no CA is allowed, and its key pair must contain the private key.
+     *
+     * @param parent the parent certificate store with at least one certificate
+     * @throws GeneralSecurityException if the parent can not issue certificates
+     */
+    private void verifyParent(final CertificateStore parent) throws GeneralSecurityException {
+        X509Certificate parentCertificate = parent.getCertificates()[0];
+        if (parentCertificate == null) {
+            throw new GeneralSecurityException("Invalid parent certificate (null)!");
+        }
+
+        String parentSubject = parentCertificate.getSubjectX500Principal().getName();
+        boolean isV1SelfSignedRoot = parentCertificate.getVersion() == 1 && parentCertificate.getSubjectX500Principal().equals(parentCertificate.getIssuerX500Principal());
+        if (!allowNonCaParent && parentCertificate.getBasicConstraints() < 0 && !isV1SelfSignedRoot) {
+            throw new GeneralSecurityException("Parent certificate '" + parentSubject + "' is not a CA certificate (basic constraints)!");
+        }
+
+        if (parent.getKeyPair() == null || parent.getKeyPair().getPrivate() == null) {
+            throw new GeneralSecurityException("Parent certificate '" + parentSubject + "' has no private key to sign the certificate!");
+        }
+    }
+
 
     /**
      * Generate a self-signed certificate and write it to files.
@@ -325,7 +385,7 @@ public class CertificateGenerator implements ICertificateGenerator {
             validityDays = Integer.parseInt(args[4]);
         }
 
-        // Read password from console (no echo) or stdin — never from a command-line argument,
+        // Read password from console (no echo) or stdin, never from a command-line argument,
         // which would expose it in process listings and shell history.
         final char[] password;
         java.io.Console console = System.console();

@@ -15,6 +15,7 @@ import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Arrays;
 import java.util.Base64;
@@ -130,7 +131,7 @@ public abstract class AbstractKeyConverter implements IKeyConverter {
         }
         
         if (LOG.isDebugEnabled()) {
-            LOG.debug("Loading " + getType() + " public key form file '" + file + "'...");
+            LOG.debug("Loading {} public key form file '{}'...", getType(), file);
         }
         
         return getPublicKey(FileUtil.getInstance().readFileContent(file));
@@ -155,24 +156,30 @@ public abstract class AbstractKeyConverter implements IKeyConverter {
             return null;
         }
         
-        String normalizedData = normalizePKCS8(content);
-        byte[] decoded = Base64.getDecoder().decode(normalizedData.getBytes());
+        byte[] decoded;
+        try {
+            String normalizedData = normalizePKCS8(content);
+            decoded = Base64.getDecoder().decode(normalizedData.getBytes());
+        } catch (IllegalArgumentException e) {
+            throw new InvalidKeySpecException("Invalid " + getType() + " private key: " + e.getMessage(), e);
+        }
+
         PrivateKey privateKey;
         try {
             PKCS8EncodedKeySpec privKeySpec = new PKCS8EncodedKeySpec(decoded);
 
             if (LOG.isDebugEnabled()) {
-                LOG.debug("File format of " + getType() + " private key is: " + privKeySpec.getFormat());
+                LOG.debug("File format of {} private key is: {}", getType(), privKeySpec.getFormat());
             }
 
-            privateKey = KeyFactory.getInstance(getType()).generatePrivate(privKeySpec);
+            privateKey = getKeyFactory().generatePrivate(privKeySpec);
         } finally {
             // the spec keeps its own copy; clear the decoded key material
             Arrays.fill(decoded, (byte) 0);
         }
 
         if (LOG.isDebugEnabled()) {
-            LOG.debug("File format of " + getType() + " private key is: " + privateKey.getFormat());
+            LOG.debug("File format of {} private key is: {}", getType(), privateKey.getFormat());
         }
         
         return privateKey;
@@ -189,7 +196,7 @@ public abstract class AbstractKeyConverter implements IKeyConverter {
         }
 
         if (LOG.isDebugEnabled()) {
-            LOG.debug("Loading " + getType() + " private key form file '" + file + "'...");
+            LOG.debug("Loading {} private key form file '{}'...", getType(), file);
         }
         
         return getPrivateKey(FileUtil.getInstance().readFileContent(file));
@@ -211,6 +218,20 @@ public abstract class AbstractKeyConverter implements IKeyConverter {
         } finally {
             Arrays.fill(encoded, (byte) 0);
         }
+    }
+
+
+    /**
+     * Get the key factory of the key type, from the configured provider or, if no provider is configured, from the default provider.
+     *
+     * @return the key factory
+     * @throws GeneralSecurityException in case the key type or the provider is not available
+     */
+    KeyFactory getKeyFactory() throws GeneralSecurityException {
+        if (provider != null && provider.trim().length() > 0) {
+            return KeyFactory.getInstance(getType(), provider);
+        }
+        return KeyFactory.getInstance(getType());
     }
 
 
@@ -247,10 +268,12 @@ public abstract class AbstractKeyConverter implements IKeyConverter {
      * @param legacyStart the key type specific PEM start
      * @param legacyEnd the key type specific PEM end
      * @return the base64 encoded private key
+     * @throws IllegalArgumentException if the content contains non ASCII characters
      */
     protected String normalizePrivateKeyPem(String content, String legacyStart, String legacyEnd) {
         String data = PKIUtil.getInstance().normalizeBuffer(content, legacyStart, legacyEnd);
-        return PKIUtil.getInstance().normalizeBuffer(data, PRIVATE_KEY_START, PRIVATE_KEY_END);
+        data = PKIUtil.getInstance().normalizeBuffer(data, PRIVATE_KEY_START, PRIVATE_KEY_END);
+        return removeWhitespace(data);
     }
 
 
@@ -278,10 +301,33 @@ public abstract class AbstractKeyConverter implements IKeyConverter {
      * @param legacyStart the key type specific PEM start
      * @param legacyEnd the key type specific PEM end
      * @return the X.509 encoded public key
+     * @throws IllegalArgumentException if the content contains non ASCII characters or is not valid base64
      */
     protected byte[] decodePublicKeyPem(byte[] content, String legacyStart, String legacyEnd) {
         String data = PKIUtil.getInstance().normalizeBuffer(new String(content), legacyStart, legacyEnd);
         data = PKIUtil.getInstance().normalizeBuffer(data, PUBLIC_KEY_START, PUBLIC_KEY_END);
-        return Base64.getDecoder().decode(data.trim());
+        return Base64.getDecoder().decode(removeWhitespace(data));
+    }
+
+
+    /**
+     * Remove all whitespace characters. This is done after the PEM header and footer are removed, because they contain spaces.
+     *
+     * @param data the data
+     * @return the data without whitespace characters
+     */
+    private static String removeWhitespace(String data) {
+        if (data == null) {
+            return null;
+        }
+
+        StringBuilder result = new StringBuilder(data.length());
+        for (int i = 0; i < data.length(); i++) {
+            char ch = data.charAt(i);
+            if (!Character.isWhitespace(ch)) {
+                result.append(ch);
+            }
+        }
+        return result.toString();
     }
 }

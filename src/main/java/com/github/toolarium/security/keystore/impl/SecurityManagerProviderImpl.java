@@ -6,6 +6,7 @@
 package com.github.toolarium.security.keystore.impl;
 
 import com.github.toolarium.common.security.ISecuredSecretValue;
+import com.github.toolarium.common.security.SecureSecret;
 import com.github.toolarium.security.keystore.ISecurityManagerProvider;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
@@ -77,7 +78,7 @@ public class SecurityManagerProviderImpl implements ISecurityManagerProvider {
             KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
             if (keyStore != null) {
                 if (LOG.isDebugEnabled()) {
-                    LOG.debug("Initialize key manager factory by [" + keyStore + "] of type " + KeyManagerFactory.getDefaultAlgorithm() + "...");
+                    LOG.debug("Initialize key manager factory by [{}] of type {}...", keyStore, KeyManagerFactory.getDefaultAlgorithm());
                 }
                 withSecret(storePassword, chars -> keyManagerFactory.init(keyStore, chars));
             }
@@ -106,18 +107,24 @@ public class SecurityManagerProviderImpl implements ISecurityManagerProvider {
 
     /**
      * Execute a secret action using the chars from the given secret value.
-     * If the secret is null or has no value, the action is invoked with a null char array.
+     * If the secret is null, the action is invoked with a null char array.
      *
      * @param secret the secret value
      * @param action the action to run
-     * @throws GeneralSecurityException in case of error
+     * @throws GeneralSecurityException in case of error or if the secret is destroyed
      */
     private static void withSecret(ISecuredSecretValue secret, SecretAction action) throws GeneralSecurityException {
-        if (secret == null || secret.getValue() == null) {
+        if (secret == null) {
             action.run(null);
         } else {
+            // read the value only once: a destroyed secret must not be used as "no password"
+            SecureSecret value = secret.getValue();
+            if (value == null || value.isDestroyed()) {
+                throw new GeneralSecurityException("The password is destroyed!");
+            }
+
             try {
-                secret.getValue().useChars(chars -> {
+                value.useChars(chars -> {
                     try {
                         action.run(chars);
                     } catch (GeneralSecurityException e) {
@@ -146,7 +153,7 @@ public class SecurityManagerProviderImpl implements ISecurityManagerProvider {
     protected TrustManager[] createTrustManagers(final KeyStore keyStore) throws GeneralSecurityException {
         try {
             if (LOG.isDebugEnabled()) {
-                LOG.debug("Initialize trust manager factory by [" + keyStore + "] of type " + System.getProperty(TRUST_MANAGER_ALGORITHM_PROPERTY, TrustManagerFactory.getDefaultAlgorithm()) + "...");
+                LOG.debug("Initialize trust manager factory by [{}] of type {}...", keyStore, System.getProperty(TRUST_MANAGER_ALGORITHM_PROPERTY, TrustManagerFactory.getDefaultAlgorithm()));
             }
             TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(System.getProperty(TRUST_MANAGER_ALGORITHM_PROPERTY, TrustManagerFactory.getDefaultAlgorithm()));
             trustManagerFactory.init(keyStore);

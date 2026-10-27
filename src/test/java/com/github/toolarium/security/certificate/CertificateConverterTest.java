@@ -176,7 +176,9 @@ public class CertificateConverterTest {
         
         List<X509Certificate> list = CertificateTestUtil.getInstance().createSelfSignedCertificates(keyPair);
         Collections.shuffle(list);
-        LOG.debug("==>" + CertificateTestUtil.getInstance().toDNList(list));
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("==>{}", CertificateTestUtil.getInstance().toDNList(list));
+        }
 
         List<X509Certificate> expiredList = CertificateUtilFactory.getInstance().getFilter().filterExpired(list);
         assertEquals("[A, B]", CertificateTestUtil.getInstance().toDNList(expiredList));

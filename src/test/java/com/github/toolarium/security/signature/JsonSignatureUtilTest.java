@@ -180,10 +180,14 @@ public class JsonSignatureUtilTest {
         final KeyPair keyPair = PKIUtil.getInstance().generateKeyPair(provider, keyPairAlgorithm, keyPairSize);
         
         String privateKeyStr = KeyConverterFactory.getInstance().getConverter(keyPairAlgorithm).formatPrivateKey(keyPair.getPrivate());
-        LOG.debug("Private key (do never print this outside of a test case!!!):\n" + privateKeyStr);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Private key (do never print this outside of a test case!!!):\n{}", privateKeyStr);
+        }
 
         String publicKeyStr = KeyConverterFactory.getInstance().getConverter(keyPairAlgorithm).formatPublicKey(keyPair.getPublic());
-        LOG.debug("Public key (do never print this outside of a test case!!!):\n" + publicKeyStr);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Public key (do never print this outside of a test case!!!):\n{}", publicKeyStr);
+        }
 
         // ----
         

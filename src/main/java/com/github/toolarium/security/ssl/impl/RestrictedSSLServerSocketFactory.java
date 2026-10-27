@@ -13,7 +13,7 @@ import javax.net.ssl.SSLServerSocketFactory;
 
 
 /**
- * An {@link SSLServerSocketFactory} which restricts the enabled cipher suites of every created server socket.
+ * An {@link SSLServerSocketFactory} which restricts the enabled cipher suites and protocols (TLSv1.2 and TLSv1.3) of every created server socket.
  *
  * @author patrick
  */
@@ -27,10 +27,11 @@ public class RestrictedSSLServerSocketFactory extends SSLServerSocketFactory {
      *
      * @param delegate the server socket factory to wrap
      * @param cipherSuites the cipher suites to enable, they must be supported by the delegate
+     * @throws IllegalArgumentException in case the cipher suites are null, empty or contain a null element
      */
     public RestrictedSSLServerSocketFactory(SSLServerSocketFactory delegate, String[] cipherSuites) {
         this.delegate = delegate;
-        this.cipherSuites = cipherSuites.clone();
+        this.cipherSuites = RestrictionSupport.validateCipherSuites(cipherSuites);
     }
 
 
@@ -89,14 +90,28 @@ public class RestrictedSSLServerSocketFactory extends SSLServerSocketFactory {
 
 
     /**
-     * Restrict the enabled cipher suites of the server socket
+     * Restrict the enabled cipher suites and protocols of the server socket. In case the restriction fails the server socket is closed.
      *
      * @param serverSocket the server socket
      * @return the server socket
      */
     private ServerSocket restrict(ServerSocket serverSocket) {
         if (serverSocket instanceof SSLServerSocket) {
-            ((SSLServerSocket) serverSocket).setEnabledCipherSuites(cipherSuites.clone());
+            SSLServerSocket sslServerSocket = (SSLServerSocket) serverSocket;
+            try {
+                sslServerSocket.setEnabledCipherSuites(cipherSuites.clone());
+                String[] protocols = RestrictionSupport.selectProtocols(sslServerSocket.getSupportedProtocols());
+                if (protocols.length > 0) {
+                    sslServerSocket.setEnabledProtocols(protocols);
+                }
+            } catch (RuntimeException ex) {
+                try {
+                    sslServerSocket.close();
+                } catch (IOException closeEx) {
+                    ex.addSuppressed(closeEx);
+                }
+                throw ex;
+            }
         }
         return serverSocket;
     }

@@ -18,6 +18,7 @@ import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.regex.Pattern;
 
 
 /**
@@ -33,6 +34,8 @@ public class CertificateConverter implements ICertificateConverter {
     /** the public key certificate end */
     public static final String PUBLIC_CERTIFICATE_END = "-----END CERTIFICATE-----";
     private static final String NL = "\n";
+    private static final Pattern SPACE_PATTERN = Pattern.compile(" ");
+    private static final Pattern CERTIFICATE_PATTERN = Pattern.compile("\nCERTIFICATE");
     
 
     /**
@@ -67,7 +70,7 @@ public class CertificateConverter implements ICertificateConverter {
         }
         
         // replace all spaces with newline
-        String data = content.trim().replaceAll(" ", NL).replaceAll("\nCERTIFICATE", " CERTIFICATE");
+        String data = CERTIFICATE_PATTERN.matcher(SPACE_PATTERN.matcher(content.trim()).replaceAll(NL)).replaceAll(" CERTIFICATE");
         String formatedCertificate = formatPKCS7(data);
         ArrayList<X509Certificate> certificates = new ArrayList<X509Certificate>();
         CertificateFactory cf = CertificateFactory.getInstance("X.509");
@@ -154,19 +157,19 @@ public class CertificateConverter implements ICertificateConverter {
      */
     @Override
     public String formatPKCS7(X509Certificate[] certificateChain) throws CertificateEncodingException {
-        String certificateChainContent = "";
+        StringBuilder certificateChainContent = new StringBuilder();
 
         for (int i = 0; i < certificateChain.length; i++) {
             if (i > 0) {
-                certificateChainContent += NL;
+                certificateChainContent.append(NL);
             }
             
             String cert = formatPKCS7(certificateChain[i]);
             if (cert != null) {
-                certificateChainContent += cert;
+                certificateChainContent.append(cert);
             }
         }
 
-        return certificateChainContent;
+        return certificateChainContent.toString();
     }
 }

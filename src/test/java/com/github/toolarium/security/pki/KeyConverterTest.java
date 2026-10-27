@@ -62,9 +62,13 @@ public class KeyConverterTest {
         PKIUtil.getInstance().processPublicKeyInfo(LOG::debug, null, publicKey);
 
         String privateKeyString = KeyConverterFactory.getInstance().getConverter(KeyConverterFactory.Types.RSA).formatPrivateKey(privateKey);
-        LOG.debug("Private key:" + privateKeyString);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Private key:{}", privateKeyString);
+        }
         String publicKeyString = KeyConverterFactory.getInstance().getConverter(KeyConverterFactory.Types.RSA).formatPublicKey(publicKey);
-        LOG.debug("Public key:" + publicKeyString);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Public key:{}", publicKeyString);
+        }
 
         PrivateKey privateKey2 = KeyConverterFactory.getInstance().getConverter(KeyConverterFactory.Types.RSA).getPrivateKey(privateKeyString);
         PublicKey publicKey2 = KeyConverterFactory.getInstance().getConverter(KeyConverterFactory.Types.RSA).getPublicKey(publicKeyString);
@@ -88,9 +92,13 @@ public class KeyConverterTest {
         PKIUtil.getInstance().processPublicKeyInfo(LOG::debug, null, publicKey);
 
         String privateKeyString = KeyConverterFactory.getInstance().getConverter(KeyConverterFactory.Types.DSA).formatPrivateKey(privateKey);
-        LOG.debug("Private key:" + privateKeyString);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Private key:{}", privateKeyString);
+        }
         String publicKeyString = KeyConverterFactory.getInstance().getConverter(KeyConverterFactory.Types.DSA).formatPublicKey(publicKey);
-        LOG.debug("Public key:" + publicKeyString);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Public key:{}", publicKeyString);
+        }
 
         PrivateKey privateKey2 = KeyConverterFactory.getInstance().getConverter(KeyConverterFactory.Types.DSA).getPrivateKey(privateKeyString);
         PublicKey publicKey2 = KeyConverterFactory.getInstance().getConverter(KeyConverterFactory.Types.DSA).getPublicKey(publicKeyString);
@@ -116,9 +124,13 @@ public class KeyConverterTest {
         PKIUtil.getInstance().processPublicKeyInfo(LOG::debug, null, publicKey);
 
         String privateKeyString = KeyConverterFactory.getInstance().getConverter(KeyConverterFactory.Types.EC).formatPrivateKey(privateKey);
-        LOG.debug("Private key:" + privateKeyString);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Private key:{}", privateKeyString);
+        }
         String publicKeyString = KeyConverterFactory.getInstance().getConverter(KeyConverterFactory.Types.EC).formatPublicKey(publicKey);
-        LOG.debug("Public key:" + publicKeyString);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Public key:{}", publicKeyString);
+        }
 
         PrivateKey privateKey2 = KeyConverterFactory.getInstance().getConverter(KeyConverterFactory.Types.EC).getPrivateKey(privateKeyString);
         PublicKey publicKey2 = KeyConverterFactory.getInstance().getConverter(KeyConverterFactory.Types.EC).getPublicKey(publicKeyString);

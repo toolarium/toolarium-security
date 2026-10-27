@@ -6,15 +6,11 @@
 package com.github.toolarium.security.ssl.util;
 
 import java.io.IOException;
-import java.net.InetAddress;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Date;
 import java.util.function.Consumer;
-import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLServerSocket;
 import javax.net.ssl.SSLServerSocketFactory;
 import javax.net.ssl.SSLSession;
@@ -28,6 +24,7 @@ import javax.net.ssl.SSLSocket;
  */
 public final class SSLUtil {
     private static final String NL = "\n";
+    private static final String[] SECURE_PROTOCOLS = {"TLSv1.2", "TLSv1.3"};
 
     /**
      * Private class, the only instance of the singelton which will be created by accessing the holder class.
@@ -62,13 +59,13 @@ public final class SSLUtil {
      *
      * @param sslContext the SSL context
      * @param port the port
-     * @param propagateHotName true to propagate the hostname as SSL parameter
+     * @param propagateHostName has no effect: server names (SNI) are only sent by a client, a server socket ignores them
      * @return the SSL server socket
      * @throws GeneralSecurityException General security exception
      * @throws IOException In case of IO error
      */
-    public SSLServerSocket getSSLServerSocket(SSLContext sslContext, int port, boolean propagateHotName) throws GeneralSecurityException, IOException {
-        return getSSLServerSocket(sslContext, port, propagateHotName, null);
+    public SSLServerSocket getSSLServerSocket(SSLContext sslContext, int port, boolean propagateHostName) throws GeneralSecurityException, IOException {
+        return getSSLServerSocket(sslContext, port, propagateHostName, null);
     }
 
     
@@ -77,36 +74,57 @@ public final class SSLUtil {
      *
      * @param sslContext the SSL context
      * @param port the port
-     * @param propagateHotName true to propagate the hostname as SSL parameter
+     * @param propagateHostName has no effect: server names (SNI) are only sent by a client, a server socket ignores them
      * @param consumer the consumer
      * @return the SSL server socket
      * @throws GeneralSecurityException General security exception
      * @throws IOException In case of IO error
      */
-    public SSLServerSocket getSSLServerSocket(SSLContext sslContext, int port, boolean propagateHotName, Consumer<String> consumer) throws GeneralSecurityException, IOException {
+    public SSLServerSocket getSSLServerSocket(SSLContext sslContext, int port, boolean propagateHostName, Consumer<String> consumer) throws GeneralSecurityException, IOException {
         //SSLSocketFactory sf = sslContext.getSocketFactory();
         //assertNotNull(sf);
         SSLServerSocketFactory ssf = sslContext.getServerSocketFactory();
         SSLServerSocket s = (SSLServerSocket) ssf.createServerSocket(port);
         try {
-            if (propagateHotName) {
-                String hostName = InetAddress.getLocalHost().getHostName();
-                SSLParameters sslParameters = s.getSSLParameters();
-                sslParameters.setServerNames(Collections.singletonList(new SNIHostName(hostName)));
-                s.setSSLParameters(sslParameters);
-            }
+            // propagateHostName has no effect: server names (SNI) are only sent by a client, a server socket ignores them
 
-            // restrict to secure protocols and cipher suites
-            s.setEnabledProtocols(new String[] {"TLSv1.2", "TLSv1.3"});
+            // restrict to secure protocols: only the enabled ones of TLSv1.2 and TLSv1.3, so a JVM without TLSv1.3 and an
+            // admin setting (e.g. jdk.tls.server.protocols=TLSv1.3) are respected; the handshake uses the highest common one
+            String[] protocols = selectSecureProtocols(s.getEnabledProtocols());
+            if (protocols.length > 0) {
+                s.setEnabledProtocols(protocols);
+            }
 
             processServerSocketInfo(consumer, s);
         } catch (Exception ex) {
-            s.close();
+            try {
+                s.close();
+            } catch (IOException closeEx) {
+                ex.addSuppressed(closeEx);
+            }
             throw ex;
         }
         return s;
     }
-    
+
+
+    /**
+     * Select the secure protocols TLSv1.2 and TLSv1.3 from the enabled protocols.
+     *
+     * @param enabledProtocols the enabled protocols of the socket
+     * @return the enabled secure protocols, empty if none of them is enabled
+     */
+    private String[] selectSecureProtocols(String[] enabledProtocols) {
+        java.util.List<String> enabled = Arrays.asList(enabledProtocols);
+        java.util.List<String> result = new java.util.ArrayList<>();
+        for (String protocol : SECURE_PROTOCOLS) {
+            if (enabled.contains(protocol)) {
+                result.add(protocol);
+            }
+        }
+        return result.toArray(new String[0]);
+    }
+
     
 
     /**
@@ -122,20 +140,23 @@ public final class SSLUtil {
         
         StringBuilder msg = new StringBuilder();
         msg.append("Socket class: ").append(s.getClass()).append(NL)
-        .append("   Remote address = ").append(s.getInetAddress().toString()).append(NL)
+        .append("   Remote address = ").append(s.getInetAddress()).append(NL)
         .append("   Remote port = ").append(s.getPort()).append(NL)
-        .append("   Local socket address = ").append(s.getLocalSocketAddress().toString()).append(NL)
-        .append("   Local address = ").append(s.getLocalAddress().toString()).append(NL)
+        .append("   Local socket address = ").append(s.getLocalSocketAddress()).append(NL)
+        .append("   Local address = ").append(s.getLocalAddress()).append(NL)
         .append("   Local port = ").append(s.getLocalPort()).append(NL)
         .append("   Need client authentication = ").append(s.getNeedClientAuth()).append(NL)
         .append("   Enabled protocols = ").append(convertList(s.getEnabledProtocols())).append(NL)
         .append("   Enabled ciphers = ").append(convertList(s.getEnabledCipherSuites())).append(NL);
 
-        SSLSession session = s.getSession();
+        // getSession() would start a blocking handshake, therefore only an already existing handshake session is read
+        SSLSession session = s.getHandshakeSession();
         if (session != null) {
             msg.append("   Session = ").append(getSessionId(session)).append(NL)
             .append("   Session creation = ").append(new Date(session.getCreationTime())).append(NL)
             .append("   Session last access = ").append(new Date(session.getLastAccessedTime())).append(NL);
+        } else {
+            msg.append("   Session = no session").append(NL);
         }
 
         consumer.accept(msg.toString());
@@ -155,7 +176,7 @@ public final class SSLUtil {
         
         StringBuilder msg = new StringBuilder();
         msg.append("Socket socket class: ").append(s.getClass()).append(NL)
-        .append("   Socket address = ").append(s.getInetAddress().toString()).append(NL)
+        .append("   Socket address = ").append(s.getInetAddress()).append(NL)
         .append("   Socket port = ").append(s.getLocalPort()).append(NL)
         .append("   Need client authentication = ").append(s.getNeedClientAuth()).append(NL)
         .append("   Want client authentication = ").append(s.getWantClientAuth()).append(NL)

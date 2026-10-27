@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.PublicKey;
+import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 
 
@@ -59,8 +60,14 @@ public class DSAKeyConverter extends AbstractKeyConverter {
             return null;
         }
         
-        X509EncodedKeySpec spec = new X509EncodedKeySpec(decodePublicKeyPem(content, PUBLIC_DSA_KEY_START, PUBLIC_DSA_KEY_END));
-        KeyFactory kf = KeyFactory.getInstance(getType());
+        X509EncodedKeySpec spec;
+        try {
+            spec = new X509EncodedKeySpec(decodePublicKeyPem(content, PUBLIC_DSA_KEY_START, PUBLIC_DSA_KEY_END));
+        } catch (IllegalArgumentException e) {
+            throw new InvalidKeySpecException("Invalid " + getType() + " public key: " + e.getMessage(), e);
+        }
+
+        KeyFactory kf = getKeyFactory();
         return kf.generatePublic(spec);
     }
 
@@ -77,7 +84,7 @@ public class DSAKeyConverter extends AbstractKeyConverter {
 
         PKCS8EncodedKeySpec privKeySpec = new PKCS8EncodedKeySpec(Base64.getDecoder().decode(normalizedData.toBytes()));
         if (LOG.isDebugEnabled()) {
-            LOG.debug("File format of private key is: " + privKeySpec.getFormat());
+            LOG.debug("File format of private key is: {}", privKeySpec.getFormat());
         }
         KeyFactory keyFactory = KeyFactory.getInstance(getType());
         return keyFactory.generatePrivate(privKeySpec);

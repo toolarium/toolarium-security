@@ -5,25 +5,22 @@
  */
 package com.github.toolarium.security.util;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.github.toolarium.common.security.ISecuredSecretValue;
-import com.github.toolarium.common.security.SecuredValueFactory;
-import javax.crypto.Cipher;
-import javax.crypto.spec.SecretKeySpec;
+import com.github.toolarium.security.cryption.util.CryptionUtil;
+import java.security.GeneralSecurityException;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 
 /**
- * Test the {@link CryptUtil}.
+ * Test the deprecated {@link CryptUtil}: it delegates to the {@link CryptionUtil} and gives the same results.
  *
  * @author patrick
  */
+@SuppressWarnings("deprecation")
 public class CryptUtilTest {
-    private static final Logger LOG = LoggerFactory.getLogger(CryptUtilTest.class);
+    private static final String PASSPHRASE = "my-test-passphrase";
 
 
     /**
@@ -35,134 +32,24 @@ public class CryptUtilTest {
 
 
     /**
-     * Test strong encryption check
-     */
-    @Test
-    public void testStrongEncryptionEnabled() {
-        boolean enabled = CryptUtil.getInstance().isStrongEncryptionEnabled();
-        LOG.debug("Strong encryption enabled: " + enabled);
-        assertTrue(enabled);
-    }
-
-
-    /**
-     * Test getCipher with mode/padding
+     * The deprecated class derives the same keys as the new class.
      *
-     * @throws Exception in case of error
+     * @throws GeneralSecurityException in case of error
      */
     @Test
-    public void testGetCipher() throws Exception {
-        Cipher cipher = CryptUtil.getInstance().getCipher("AES/ECB/PKCS5Padding");
-        assertNotNull(cipher);
-    }
+    public void testDelegation() throws GeneralSecurityException {
+        assertEquals(CryptionUtil.ALGORITHM_AES, CryptUtil.ALGORITHM_AES);
+        assertEquals(CryptionUtil.getInstance().isStrongEncryptionEnabled(), CryptUtil.getInstance().isStrongEncryptionEnabled());
+        assertEquals(CryptionUtil.getInstance().getMaxAllowedKeyLength("AES"), CryptUtil.getInstance().getMaxAllowedKeyLength("AES"));
+        assertEquals(CryptionUtil.getInstance().getAlgorithmMessage("SunJCE", "AES/GCM/NoPadding"), CryptUtil.getInstance().getAlgorithmMessage("SunJCE", "AES/GCM/NoPadding"));
+        assertEquals(16, CryptUtil.getInstance().generateSalt().length);
 
+        assertArrayEquals(CryptionUtil.getInstance().createSecretKeySpec(PASSPHRASE.toCharArray()).getEncoded(),
+                          CryptUtil.getInstance().createSecretKeySpec(PASSPHRASE.toCharArray()).getEncoded());
 
-    /**
-     * Test getCipher with provider
-     *
-     * @throws Exception in case of error
-     */
-    @Test
-    public void testGetCipherWithProvider() throws Exception {
-        Cipher cipher = CryptUtil.getInstance().getCipher(null, "AES/ECB/PKCS5Padding");
-        assertNotNull(cipher);
-    }
-
-
-    /**
-     * Test createSecretKeySpec from passphrase (fixed-salt overload)
-     *
-     * @throws Exception in case of error
-     */
-    @Test
-    public void testCreateSecretKeySpecFromPassphrase() throws Exception {
-        SecretKeySpec key = CryptUtil.getInstance().createSecretKeySpec("my-test-passphrase".toCharArray());
-        assertNotNull(key);
-        assertNotNull(key.getEncoded());
-        assertTrue(key.getEncoded().length > 0);
-    }
-
-
-    /**
-     * Test createSecretKeySpec from passphrase with explicit salt and iterations
-     *
-     * @throws Exception in case of error
-     */
-    @Test
-    public void testCreateSecretKeySpecFromPassphraseWithSalt() throws Exception {
-        byte[] salt = new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
-        SecretKeySpec key = CryptUtil.getInstance().createSecretKeySpec("my-test-passphrase".toCharArray(), salt, 10_000);
-        assertNotNull(key);
-        assertNotNull(key.getEncoded());
-        assertTrue(key.getEncoded().length > 0);
-    }
-
-
-    /**
-     * Test createSecretKeySpec from ISecuredSecretValue passphrase (fixed-salt overload)
-     *
-     * @throws Exception in case of error
-     */
-    @Test
-    public void testCreateSecretKeySpecFromSecuredValue() throws Exception {
-        ISecuredSecretValue passphrase = SecuredValueFactory.getInstance().createSecret("my-test-passphrase".toCharArray(), "test");
-        SecretKeySpec key = CryptUtil.getInstance().createSecretKeySpec(passphrase);
-        assertNotNull(key);
-        assertNotNull(key.getEncoded());
-        assertTrue(key.getEncoded().length > 0);
-    }
-
-
-    /**
-     * Test createSecretKeySpec from ISecuredSecretValue passphrase with explicit salt and iterations
-     *
-     * @throws Exception in case of error
-     */
-    @Test
-    public void testCreateSecretKeySpecFromSecuredValueWithSalt() throws Exception {
-        ISecuredSecretValue passphrase = SecuredValueFactory.getInstance().createSecret("my-test-passphrase".toCharArray(), "test");
-        byte[] salt = new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
-        SecretKeySpec key = CryptUtil.getInstance().createSecretKeySpec(passphrase, salt, 10_000);
-        assertNotNull(key);
-        assertNotNull(key.getEncoded());
-        assertTrue(key.getEncoded().length > 0);
-    }
-
-
-    /**
-     * Test createSecretKeySpec from bytes
-     */
-    @Test
-    public void testCreateSecretKeySpecFromBytes() {
-        byte[] keyBytes = new byte[16];
-        SecretKeySpec key = CryptUtil.getInstance().createSecretKeySpec(keyBytes, "AES");
-        assertNotNull(key);
-    }
-
-
-    /**
-     * Test getMaxAllowedKeyLength
-     *
-     * @throws Exception in case of error
-     */
-    @Test
-    public void testGetMaxAllowedKeyLength() throws Exception {
-        int maxLength = CryptUtil.getInstance().getMaxAllowedKeyLength("AES");
-        LOG.debug("Max allowed AES key length: " + maxLength);
-        assertTrue(maxLength > 0);
-    }
-
-
-    /**
-     * Test getAlgorithmMessage
-     */
-    @Test
-    public void testGetAlgorithmMessage() {
-        String msg = CryptUtil.getInstance().getAlgorithmMessage("SunJCE", "AES/GCM/NoPadding");
-        assertTrue(msg.contains("SunJCE"));
-        assertTrue(msg.contains("AES/GCM/NoPadding"));
-
-        String msgNoProvider = CryptUtil.getInstance().getAlgorithmMessage(null, "AES/GCM/NoPadding");
-        assertTrue(msgNoProvider.equals("AES/GCM/NoPadding"));
+        byte[] salt = CryptionUtil.getInstance().generateSalt();
+        assertArrayEquals(CryptionUtil.getInstance().createSecretKeySpec(PASSPHRASE.toCharArray(), salt, 1000).getEncoded(),
+                          CryptUtil.getInstance().createSecretKeySpec(PASSPHRASE.toCharArray(), salt, 1000).getEncoded());
+        assertEquals("AES/GCM/NoPadding", CryptUtil.getInstance().getCipher("AES/GCM/NoPadding").getAlgorithm());
     }
 }

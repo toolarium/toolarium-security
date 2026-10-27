@@ -77,8 +77,14 @@ public class RSAKeyConverter extends AbstractKeyConverter {
             return null;
         }
         
-        X509EncodedKeySpec spec = new X509EncodedKeySpec(decodePublicKeyPem(content, PUBLIC_RSA_KEY_START, PUBLIC_RSA_KEY_END));
-        KeyFactory kf = KeyFactory.getInstance(getType());
+        X509EncodedKeySpec spec;
+        try {
+            spec = new X509EncodedKeySpec(decodePublicKeyPem(content, PUBLIC_RSA_KEY_START, PUBLIC_RSA_KEY_END));
+        } catch (IllegalArgumentException e) {
+            throw new InvalidKeySpecException("Invalid " + getType() + " public key: " + e.getMessage(), e);
+        }
+
+        KeyFactory kf = getKeyFactory();
         return kf.generatePublic(spec);
     }
 
@@ -92,21 +98,28 @@ public class RSAKeyConverter extends AbstractKeyConverter {
             return null;
         }
         
-        String normalizedData = normalizePKCS8(content);
+        String normalizedData;
+        try {
+            normalizedData = normalizePKCS8(content);
+        } catch (IllegalArgumentException e) {
+            throw new InvalidKeySpecException("Invalid " + getType() + " private key: " + e.getMessage(), e);
+        }
 
         try {
             return super.getPrivateKey(normalizedData);
         } catch (InvalidKeySpecException e) {
             // not PKCS#8: try PKCS#1 (e.g. openssl genrsa -traditional), which is wrapped into PKCS#8
-            byte[] decoded = Base64.getDecoder().decode(normalizedData.getBytes());
+            byte[] decoded = null;
             byte[] pkcs8 = null;
             try {
+                // invalid base64 is a RuntimeException and is reported as InvalidKeySpecException below
+                decoded = Base64.getDecoder().decode(normalizedData.getBytes());
                 org.bouncycastle.asn1.pkcs.RSAPrivateKey pkcs1 = org.bouncycastle.asn1.pkcs.RSAPrivateKey.getInstance(decoded);
                 PrivateKeyInfo privateKeyInfo = new PrivateKeyInfo(new AlgorithmIdentifier(PKCSObjectIdentifiers.rsaEncryption, DERNull.INSTANCE), pkcs1);
                 pkcs8 = privateKeyInfo.getEncoded();
-                PrivateKey privateKey = KeyFactory.getInstance(getType()).generatePrivate(new PKCS8EncodedKeySpec(pkcs8));
+                PrivateKey privateKey = getKeyFactory().generatePrivate(new PKCS8EncodedKeySpec(pkcs8));
                 if (LOG.isDebugEnabled()) {
-                    LOG.debug("Converted PKCS#1 " + getType() + " private key into " + privateKey.getFormat() + ".");
+                    LOG.debug("Converted PKCS#1 {} private key into {}.", getType(), privateKey.getFormat());
                 }
                 return privateKey;
             } catch (IOException | RuntimeException | GeneralSecurityException ex) {
@@ -115,7 +128,9 @@ public class RSAKeyConverter extends AbstractKeyConverter {
                 throw result;
             } finally {
                 // clear the decoded key material
-                Arrays.fill(decoded, (byte) 0);
+                if (decoded != null) {
+                    Arrays.fill(decoded, (byte) 0);
+                }
                 if (pkcs8 != null) {
                     Arrays.fill(pkcs8, (byte) 0);
                 }
@@ -129,6 +144,10 @@ public class RSAKeyConverter extends AbstractKeyConverter {
      */
     @Override
     public String formatPublicKey(PublicKey publicKey) {
+        if (publicKey == null) {
+            return null;
+        }
+
         return formatPublicKeyPem(publicKey, PUBLIC_RSA_KEY_START, PUBLIC_RSA_KEY_END);
     }
 

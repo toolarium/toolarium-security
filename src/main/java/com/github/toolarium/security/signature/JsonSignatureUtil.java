@@ -29,7 +29,7 @@ public final class JsonSignatureUtil {
     private static final String NL = "\n";
     private static final String SPACE = " ";
 
-    // Derived from the same constants used in sign() — guaranteed to match the produced format
+    // Derived from the same constants used in sign(), guaranteed to match the produced format
     private static final String REQUEST_PREFIX = OPEN_BRACE + NL + SPACE + QUOTATION_MARKS + "request" + QUOTATION_MARKS + COLON + SPACE;
     private static final String SIGNATURE_INFIX = COME + NL + SPACE + QUOTATION_MARKS + "signature" + QUOTATION_MARKS + COLON + QUOTATION_MARKS;
     private static final String SIGNATURE_SUFFIX = QUOTATION_MARKS + NL + ENDING_BRACE;
@@ -78,7 +78,7 @@ public final class JsonSignatureUtil {
     public String sign(String provider, String signatureAlgorithm, PrivateKey privateKey, String inputJson) throws GeneralSecurityException {
         final String json = validateJsonInput(inputJson);
         if (LOG.isDebugEnabled()) {
-            LOG.debug("JSON request to sign [" + json + "]");
+            LOG.debug("JSON request to sign [{}]", json);
         }
 
         // raw content to sign and test
@@ -89,7 +89,7 @@ public final class JsonSignatureUtil {
         final String signature = new String(Base64.getEncoder().encode(rawSignature));
         
         if (LOG.isDebugEnabled()) {
-            LOG.debug("Signature generated (" + signature.length() + " chars)");
+            LOG.debug("Signature generated ({} chars)", signature.length());
         }
         
         StringBuilder result = new StringBuilder()
@@ -100,7 +100,7 @@ public final class JsonSignatureUtil {
                 .append(ENDING_BRACE);
 
         if (LOG.isDebugEnabled()) {
-            LOG.debug("Signed JSON request [" + result + "]");
+            LOG.debug("Signed JSON request [{}]", result);
         }
 
         return result.toString();
@@ -146,8 +146,8 @@ public final class JsonSignatureUtil {
         }
 
         if (LOG.isDebugEnabled()) {
-            LOG.debug("Parsed signature [" + signature + "]");
-            LOG.debug("Parsed request [" + requestContent + "]");
+            LOG.debug("Parsed signature [{}]", signature);
+            LOG.debug("Parsed request [{}]", requestContent);
         }
 
         final byte[] rawContent = requestContent.getBytes(StandardCharsets.UTF_8);
@@ -164,7 +164,7 @@ public final class JsonSignatureUtil {
      * @throws IllegalArgumentException In case of invalid input
      */
     private String validateJsonInput(String inputJson) {
-        if (inputJson == null || inputJson.isBlank()) {
+        if (inputJson == null || inputJson.trim().isEmpty()) {
             throw new IllegalArgumentException("Invalid JSON!");
         }
 

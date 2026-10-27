@@ -145,7 +145,9 @@ public abstract class AbstractHttpsService implements Runnable {
                 
             } catch (SSLException e) {
                 if ("Connection reset".equals(e.getMessage()) || "An established connection was aborted by the software in your host machine".equals(e.getMessage())) {
-                    LOG.debug(e.toString());
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug(e.toString());
+                    }
                 } else {
                     LOG.warn(e.toString());
                 }
@@ -165,7 +167,7 @@ public abstract class AbstractHttpsService implements Runnable {
             }
         }
         
-        LOG.info("Service ended (" + run + ").");
+        LOG.info("Service ended ({}).", run);
     }
 
 

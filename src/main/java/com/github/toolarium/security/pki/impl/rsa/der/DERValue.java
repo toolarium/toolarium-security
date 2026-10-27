@@ -12,6 +12,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
 
 
 /**
@@ -292,12 +293,15 @@ public class DERValue {
 
         length = DERInputStream.getLength((lenByte & 0xff), in);
         if (length == -1) {
-            // indefinite length encoding found — read all remaining bytes
+            // indefinite length encoding found: read all remaining bytes, but not more than the maximum DER length
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             byte[] tmpBuf = new byte[4096];
             int bytesRead;
             while ((bytesRead = in.read(tmpBuf)) != -1) {
                 baos.write(tmpBuf, 0, bytesRead);
+                if (baos.size() > DERInputStream.MAX_DER_LENGTH) {
+                    throw new IOException("Indefinite length encoding exceeds the maximum length of " + DERInputStream.MAX_DER_LENGTH + " bytes");
+                }
             }
             byte[] remainingBytes = baos.toByteArray();
 
@@ -317,6 +321,8 @@ public class DERValue {
         }
 
         if (length == 0) {
+            buffer = new DERInputBuffer(new byte[0]);
+            data = new DERInputStream(buffer);
             return;
         }
         
@@ -348,9 +354,7 @@ public class DERValue {
         // xxx yeech, excess copies ... DERInputBuffer.write(OutStream)
         if (length > 0) {
             byte[] value = new byte[length];
-            buffer.reset();
-
-            if (buffer.read(value) != length) {
+            if (valueBuffer().read(value) != length) {
                 throw new IOException("short DER value read (encode)");
             }
 
@@ -372,7 +376,7 @@ public class DERValue {
         if (length != 1) {
             throw new IOException("DERValue.getBoolean, invalid length " + length);
         }
-        if (buffer.read() != 0) {
+        if (valueBuffer().read() != 0) {
             return true;
         }
         return false;
@@ -389,7 +393,7 @@ public class DERValue {
         if (tag != tag_ObjectId) {
             throw new IOException("DERValue.getOID, not an OID " + tag);
         }
-        return new ObjectIdentifier(buffer);
+        return new ObjectIdentifier(valueBuffer());
     }
 
 
@@ -405,7 +409,7 @@ public class DERValue {
         }
 
         byte[] bytes = new byte[length];
-        if (buffer.read(bytes) != length) {
+        if (length > 0 && valueBuffer().read(bytes) != length) {
             throw new IOException("short read on DERValue buffer");
         }
         
@@ -424,7 +428,7 @@ public class DERValue {
             throw new IOException("DERValue.getInteger, not an int " + tag);
         }
         
-        return buffer.getUnsigned(data.available());
+        return valueBuffer().getUnsigned(length);
     }
 
     
@@ -441,7 +445,7 @@ public class DERValue {
                 throw new IOException("DERValue.getInteger, not an int " + tag);
             }
         }
-        return buffer.getUnsigned(data.available());
+        return valueBuffer().getUnsigned(length);
     }
 
     
@@ -456,7 +460,7 @@ public class DERValue {
             throw new IOException("DERValue.getEnumerated, incorrect tag: " + tag);
         }
         
-        return buffer.getUnsigned(data.available());
+        return valueBuffer().getUnsigned(length);
     }
 
     
@@ -471,7 +475,8 @@ public class DERValue {
             throw new IOException("DERValue.getBitString, not a bit string " + tag);
         }
         
-        return buffer.getBitString();
+        checkBitString();
+        return valueBuffer().getBitString();
     }
 
     
@@ -489,7 +494,8 @@ public class DERValue {
             }
         }
         
-        return buffer.getBitString();
+        checkBitString();
+        return valueBuffer().getBitString();
     }
 
     
@@ -504,7 +510,8 @@ public class DERValue {
             throw new IOException("DERValue.getBitString, not a bit string " + tag);
         }
         
-        return buffer.getUnalignedBitString();
+        checkBitString();
+        return valueBuffer().getUnalignedBitString();
     }
 
     
@@ -521,7 +528,8 @@ public class DERValue {
                 throw new IOException("DERValue.getBitString, not a bit string " + tag);
             }
         }
-        return buffer.getUnalignedBitString();
+        checkBitString();
+        return valueBuffer().getUnalignedBitString();
     }
 
     
@@ -560,8 +568,9 @@ public class DERValue {
      */
     private byte[] getDataBytes() throws IOException {
         byte[] retVal = new byte[length];
-        data.reset();
-        data.getBytes(retVal);
+        if (length > 0 && valueBuffer().read(retVal) != length) {
+            throw new IOException("short read on DERValue buffer");
+        }
         return retVal;
     }
 
@@ -665,14 +674,12 @@ public class DERValue {
      * @return true if they are the equals
      */
     public boolean equals(DERValue other) {
-        data.reset();
-        other.data.reset();
         if (this == other) {
             return true;
-        } else if (tag != other.tag) {
+        } else if (other == null || tag != other.tag) {
             return false;
         } else {
-            return buffer.equals(other.buffer);
+            return valueBuffer().equals(other.valueBuffer());
         }
     }
 
@@ -716,7 +723,7 @@ public class DERValue {
             // integers
             return "[DERValue, tag = " + tag + ", length = " + length + "]";
         } catch (IOException e) {
-            throw new IllegalArgumentException("misformatted DER value");
+            return "[DERValue, tag = " + tag + ", malformed]";
         }
     }
 
@@ -731,7 +738,6 @@ public class DERValue {
         DEROutputStream out = new DEROutputStream();
 
         encode(out);
-        data.reset();
         return out.toByteArray();
     }
 
@@ -743,7 +749,7 @@ public class DERValue {
      */
     public DERInputStream toDERInputStream() throws IOException {
         if (tag == tag_Sequence || tag == tag_Set) {
-            return new DERInputStream(buffer);
+            return new DERInputStream(valueBuffer());
         }
         
         throw new IOException("toDerInputStream rejects tag type " + tag);
@@ -760,6 +766,35 @@ public class DERValue {
     }
 
     
+    /**
+     * Get a copy of the buffer of the value: reading from it does not change this value, so the value can be read
+     * any number of times.
+     *
+     * @return the copy of the buffer, positioned at the start of the value
+     */
+    private DERInputBuffer valueBuffer() {
+        return buffer.dup();
+    }
+
+
+    /**
+     * Check the first byte of a bit string, the number of unused bits: it must be between 0 and 7 and 0 for an empty
+     * bit string.
+     *
+     * @throws IOException in case of an invalid bit string
+     */
+    private void checkBitString() throws IOException {
+        if (length < 1) {
+            throw new IOException("DERValue.getBitString, empty bit string");
+        }
+
+        int unusedBits = valueBuffer().read();
+        if (unusedBits < 0 || unusedBits > 7 || (length == 1 && unusedBits != 0)) {
+            throw new IOException("DERValue.getBitString, invalid number of unused bits: " + unusedBits);
+        }
+    }
+
+
     /**
      * Create the tag of the attribute.
      *
@@ -794,7 +829,8 @@ public class DERValue {
      */
     @Override
     public int hashCode() {
-        return toString().hashCode();
+        // computed from the tag and the encoded value like equals, it does not decode the value and never fails on malformed values
+        return 31 * tag + Arrays.hashCode(valueBuffer().toByteArray());
     }
 }
 

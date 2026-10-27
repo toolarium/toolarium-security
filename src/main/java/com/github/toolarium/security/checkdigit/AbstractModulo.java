@@ -32,7 +32,7 @@ public abstract class AbstractModulo<T> implements IModulo<T> {
      */
     @Override
     public boolean validate(String data) {
-        if (data == null || data.isBlank()) {
+        if (data == null || data.trim().isEmpty()) {
             throw new IllegalArgumentException("Invalid number");
         }
 
@@ -64,7 +64,7 @@ public abstract class AbstractModulo<T> implements IModulo<T> {
      * @throws IllegalArgumentException In case of an invalid input
      */
     protected long calculateModulo(String data) {
-        if (data == null || data.isBlank()) {
+        if (data == null || data.trim().isEmpty()) {
             throw new IllegalArgumentException("Invalid numbers!");
         }
 
@@ -81,7 +81,7 @@ public abstract class AbstractModulo<T> implements IModulo<T> {
      * @throws IllegalArgumentException In case of an invalid input
      */
     protected Integer[] parseString(String inputData) {
-        if (inputData == null || inputData.isBlank()) {
+        if (inputData == null || inputData.trim().isEmpty()) {
             throw new IllegalArgumentException("Invalid numbers!");
         }
         

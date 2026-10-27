@@ -7,43 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [ 1.2.0 ] - 2026-10-27
 ### Added
-- `ICertificateGenerator.createCACertificate` to create root and intermediate CA certificates. Custom implementations of `ICertificateGenerator` must add these methods.
-- `CertificateVerifier`: optional trusted root certificates (`setTrustedCertificates`), switchable strict chain validation (`setStrictChainValidation`) and strict revocation checking (`setRevocationStrict`).
-- `CertificateUtilFactory.createVerifier(boolean revocationEnabled)`.
-- `ToolariumTrustManager`: host name (`ToolariumTrustManager(String)`, `setHostname`) and revocation checking (`setRevocationEnabled`, `setRevocationStrict`).
-- `KeyStoreUtil.addCertificateToTrustKeystore(alias, certificateChain, global)` to change the shared default trust keystore on purpose.
-- `SSLContextFactory.getRecommendedCipherSuites()`.
-- `CryptUtil.generateSalt()`.
-- `RSAPrivateKeyPKCS8.destroy()` to clear the key material.
-- System property `toolarium.security.legacyPemHeaders=true` to write the PEM headers of version 1.1.8 and older.
-- System property `toolarium.security.trustManagerAlgorithm` to choose the trust manager algorithm (`SunX509` for the old behaviour).
+- Encryption of content of any size: `CryptionAsymmetric` (RSA keys), `CryptionSymmetric` (AES key or passphrase) and the streams `CryptionOutputStream` / `CryptionInputStream`, configurable with a builder.
+- CA certificates: `ICertificateGenerator.createCACertificate` (custom implementations must add it) and `CertificateUtilFactory.getGenerator(true)` for the old behaviour with a parent which is no CA.
+- `CertificateVerifier`: optional trusted root certificates, switchable strict chain validation and strict revocation checking; `CertificateUtilFactory.createVerifier(boolean)`.
+- `ToolariumTrustManager`: host name verification and revocation checking.
+- `KeyStoreUtil.addCertificateToTrustKeystore(alias, certificateChain, global)` and `ReadOnlyKeyStore`.
+- `SSLContextFactory.getRecommendedCipherSuites()`, `CryptionUtil.generateSalt()` and `RSAPrivateKeyPKCS8.destroy()`.
+- System properties `toolarium.security.legacyPemHeaders` and `toolarium.security.trustManagerAlgorithm` to restore the behaviour of version 1.1.8.
 
 ### Changed
-- Keys are written with the standard PEM headers, so other tools like OpenSSL can read them. The old headers are still read. Version 1.1.8 and older can not read the new files (see `toolarium.security.legacyPemHeaders`).
-- RSA private keys in the traditional OpenSSL format can be loaded; invalid keys are rejected when loaded.
-- Certificate chain validation is strict by default: expired certificates and issuers which are no CA are rejected (old behaviour: `setStrictChainValidation(false)`).
-- `createCreateCertificate` creates end-entity certificates; a self-signed certificate is no CA anymore. Use `createCACertificate` for a CA.
+- Keys are written with the standard PEM headers (readable by OpenSSL); the old headers are still read.
+- Certificate chains are validated strictly by default (old behaviour: `setStrictChainValidation(false)`).
+- Generated certificates are end-entity certificates and only get `localhost` as host name if no host name is given; a parent must be a CA.
 - `CertificateUtilFactory.getVerifier()` returns a new verifier on every call.
-- `ToolariumTrustManager` keeps every trusted certificate, supports wildcard host names and does not remember certificates while the verification is off.
-- Revocation checking (off by default) works when it is enabled.
-- `SSLContextFactory.createSslContext(provider, allowedCipherSuites...)` enforces the given cipher suites.
-- The trust managers use the JVM default algorithm (old behaviour: `-Dtoolarium.security.trustManagerAlgorithm=SunX509`).
-- `KeyStoreUtil.writePKCS12KeyStore` does not overwrite an existing keystore which can not be read (e.g. wrong password).
-- `KeyStoreUtil.addCertificateToTrustKeystore(alias, ...)` no longer changes the shared default trust keystore.
-- Keystore and key files are only readable by the owner on POSIX systems.
-- `CryptUtil.createSecretKeySpec(passphrase, salt, iterations)` requires a salt of at least 16 bytes.
-- `HashId.encrypt` throws `IllegalArgumentException` for invalid input.
+- `ToolariumTrustManager` and `ToolariumKeyManager` work with `SSLEngine` and check the host name of each connection.
+- Restricted SSL contexts and `SSLUtil.getSSLServerSocket` use TLSv1.2 / TLSv1.3 only; the given cipher suites are enforced.
+- The trust managers use the JVM default algorithm (PKIX).
+- The shared default trust keystore is read only, keystores are written safely and only readable by the owner.
+- Passphrase encrypted data is limited to 200 000 PBKDF2 iterations by default; `createSecretKeySpec` requires a salt of at least 16 bytes.
 - Logs of routine operations are DEBUG instead of INFO.
 
-### Deprecated
-- `SSLContextFactory.RECOMMENDED_CIPHER_SUITES`: use `getRecommendedCipherSuites()`.
-
 ### Fixed
-- The deprecated `PKIUtil.PUBLIC_*_KEY_START/END` constants contained the private key headers.
-- `HashId` handles very large numbers and malformed input.
-- `PKIConfigurationUtil` loads generic PEM keys.
-- The DER parser rejects malformed input with a clear exception.
-- `CryptoHashUtil` accepts a provider name with surrounding spaces.
+- Runs on Java 8 again.
+- Revocation checking works when it is enabled.
+- Key material is no longer exposed in exception messages.
+- Malformed input (PEM, DER, certificates, keys, signatures) gives a clear exception instead of a crash, hang or wrong result.
+- `HashId` with very large numbers, `Modulo11` with long numbers and the deprecated `PKIUtil` public key header constants.
 - Complete Javadoc.
 
 ## [ 1.1.8 ] - 2026-10-20
@@ -58,7 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CertificateGenerator main method reads keystore password into `char[]` and zeroes it after use.
 - JsonSignatureUtil.verify() rewrote signature extraction to use exact structural matching against constants derived from sign() format, plus base64 validation, preventing JSON signature bypass via key-name injection.
 - SecurityManagerProviderFactory: added `DEFAULT_ALIAS` and `DEFAULT_PASSWORD` constants for the no-arg convenience method defaults; added `WARNING: FOR DEVELOPMENT/TESTING ONLY` Javadoc on the zero-arg overload.
-- CertificateVerifier: revocation check disabled by default — added prominent class-level and constructor-level WARNING Javadoc; `System.setProperty("com.sun.security.enableCRLDP", "true")` is now set lazily inside `verifyRevocation()` only when actually needed (guarded to avoid redundant sets); self-signed root verification site documented that it does not validate against a trust anchor.
+- CertificateVerifier: revocation check disabled by default; added prominent class-level and constructor-level WARNING Javadoc; `System.setProperty("com.sun.security.enableCRLDP", "true")` is now set lazily inside `verifyRevocation()` only when actually needed (guarded to avoid redundant sets); self-signed root verification site documented that it does not validate against a trust anchor.
 - ToolariumTrustManager: documented that `getHostname()` returns null and hostname verification is skipped by default.
 - SignatureUtil.sign(): added best-effort `PrivateKey.destroy()` call after signing to zero key material; DEBUG log site annotated with warning about key metadata exposure.
 - SSLContextFactory: replaced class-level WARNING comment with usage documentation; added `createSslContext(ISecurityManagerProvider, String...)` overload to allow an explicit cipher suite allow-list, and `applyCipherSuites(SSLEngine, String...)` helper that validates suites against JVM-supported ones.

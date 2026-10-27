@@ -33,7 +33,12 @@ public class ByteArrayTagOrder implements Comparator<byte[]> {
      */
     @Override
     public final int compare(byte[] bytes1, byte[] bytes2) {
+        // an empty array has no tag, it is sorted first
+        if (bytes1.length == 0 || bytes2.length == 0) {
+            return bytes1.length - bytes2.length;
+        }
+
         // tag order is same as byte order ignoring any difference in the constructivity bit (0x02)
-        return (bytes1[0] | 0x20) - (bytes2[0] | 0x20);
+        return ((bytes1[0] & 0xff) | 0x20) - ((bytes2[0] & 0xff) | 0x20);
     }   
 }

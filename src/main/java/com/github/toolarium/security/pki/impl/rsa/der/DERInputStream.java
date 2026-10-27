@@ -33,10 +33,10 @@ import java.util.Vector;
 public class DERInputStream {
 
     /** Maximum nesting depth for constructed DER values to prevent stack overflow from malformed input. */
-    private static final int MAX_DER_NESTING_DEPTH = 100;
+    static final int MAX_DER_NESTING_DEPTH = 100;
 
     /** Maximum allowed DER value length (32 MB) to prevent denial-of-service via huge allocation from untrusted input. */
-    private static final int MAX_DER_LENGTH = 32 * 1024 * 1024;
+    static final int MAX_DER_LENGTH = 32 * 1024 * 1024;
 
     // This version only supports fully buffered DER.  This is easy to work with, though if large objects are manipulated DER becomes
     // awkward to deal with.  That's where BER is useful, since BER handles streaming data relatively well.
@@ -183,10 +183,11 @@ public class DERInputStream {
         }
         
         length--;
+        checkAvailable(length);
 
         // Just read the data into an aligned, padded octet buffer.
         byte[] retval = new byte[length];
-        if (buffer.read(retval) != length) {
+        if (length > 0 && buffer.read(retval) != length) { // an empty bit string has no data to read
             throw new IOException("short read of DER bit string");
         }
         return retval;
@@ -210,9 +211,19 @@ public class DERInputStream {
         }
 
         // First byte = number of excess bits in the last octet of the representation.
-        int validBits = length * 8 - buffer.read();
+        int unusedBits = buffer.read();
+        if (unusedBits < 0) {
+            throw new IOException("DER input, unexpected end of data in bit string");
+        }
+
+        if (unusedBits > 7 || (length == 0 && unusedBits != 0)) {
+            throw new IOException("DER input, invalid number of unused bits in bit string: " + unusedBits);
+        }
+
+        checkAvailable(length);
+        int validBits = length * 8 - unusedBits;
         byte[] repn = new byte[length];
-        if (buffer.read(repn) != length) {
+        if (length > 0 && buffer.read(repn) != length) { // an empty bit string has no data to read
             throw new IOException("short read of DER bit string");
         }
         return new BitArray(validBits, repn);
@@ -231,6 +242,7 @@ public class DERInputStream {
         }
 
         int length = getDefiniteLength();
+        checkAvailable(length);
         byte[] retval = new byte[length];
         if (buffer.read(retval) != length) {
             throw new IOException("short read of DER octet string");
@@ -352,15 +364,16 @@ public class DERInputStream {
         }
 
         // Create a temporary stream from which to read the data, unless it's not really needed.
+        // The depth of this stream is not changed, only a newly created sub stream gets the increased depth.
         if (buffer.available() == len) {
             newstr = this;
         } else {
             newstr = subStream(len, true);
+            newstr.nestingDepth = this.nestingDepth + 1;
         }
-        newstr.nestingDepth = this.nestingDepth + 1;
         
-        // Pull values out of the stream.
-        Vector<DERValue> vec = new Vector<DERValue>(startLen, 5);
+        // Pull values out of the stream; the capacity of the vector doubles when it grows (linear time in total).
+        Vector<DERValue> vec = new Vector<DERValue>(startLen);
         DERValue value;
 
         do {
@@ -471,34 +484,28 @@ public class DERInputStream {
         }
 
         // UTC time encoded as ASCII chars, YYMMDDhhmmss. If YY <= 50, we assume 20YY; if YY > 50, we assume 19YY, as per RFC 2459.
-        int year = 10 * Character.digit((char) buffer.read(), 10);
-        year += Character.digit((char) buffer.read(), 10);
+        int year = readDigits(2);
         if (year <= 50) { // origin 2000
             year += 2000;
         } else {
             year += 1900;   // origin 1900
         }
 
-        int month = 10 * Character.digit((char) buffer.read(), 10);
-        month += Character.digit((char) buffer.read(), 10);
+        int month = readDigits(2);
         month -= 1; // months are 0-11
 
-        int day = 10 * Character.digit((char) buffer.read(), 10);
-        day += Character.digit((char) buffer.read(), 10);
+        int day = readDigits(2);
 
-        int hour = 10 * Character.digit((char) buffer.read(), 10);
-        hour += Character.digit((char) buffer.read(), 10);
+        int hour = readDigits(2);
 
-        int minute = 10 * Character.digit((char) buffer.read(), 10);
-        minute += Character.digit((char) buffer.read(), 10);
+        int minute = readDigits(2);
 
         len -= 10;
 
         // We allow for non-encoded seconds, even though the IETF-PKIX specification says that the seconds should always be encoded even if it is zero.
         int second;
         if (len == 3 || len == 7) {
-            second = 10 * Character.digit((char) buffer.read(), 10);
-            second += Character.digit((char) buffer.read(), 10);
+            second = readDigits(2);
             len -= 2;
         } else {
             second = 0;
@@ -526,10 +533,8 @@ public class DERInputStream {
         int mtmp;
         switch (buffer.read()) {
             case '+': 
-                htmp = 10 * Character.digit((char) buffer.read(), 10);
-                htmp += Character.digit((char) buffer.read(), 10);
-                mtmp = 10 * Character.digit((char) buffer.read(), 10);
-                mtmp += Character.digit((char) buffer.read(), 10);
+                htmp = readDigits(2);
+                mtmp = readDigits(2);
                 if (htmp >= 24 || mtmp >= 60) {
                     throw new IOException("Parse UTCtime, +hhmm");
                 }
@@ -538,10 +543,8 @@ public class DERInputStream {
                 break;
 
             case '-': 
-                htmp = 10 * Character.digit((char) buffer.read(), 10);
-                htmp += Character.digit((char) buffer.read(), 10);
-                mtmp = 10 * Character.digit((char) buffer.read(), 10);
-                mtmp += Character.digit((char) buffer.read(), 10);
+                htmp = readDigits(2);
+                mtmp = readDigits(2);
                 if (htmp >= 24 || mtmp >= 60) {
                     throw new IOException("Parse UTCtime, -hhmm");
                 }
@@ -577,31 +580,23 @@ public class DERInputStream {
         int len = getLength(buffer); // CHECKSTYLE IGNORE THIS LINE
 
         // Generalized time encoded as ASCII chars, YYYYMMDDhhmm[ss]
-        int year = 1000 * Character.digit((char) buffer.read(), 10);
-        year += 100 * Character.digit((char) buffer.read(), 10);
-        year += 10 * Character.digit((char) buffer.read(), 10);
-        year += Character.digit((char) buffer.read(), 10);
+        final int year = readDigits(4);
 
-        int month = 10 * Character.digit((char) buffer.read(), 10);
-        month += Character.digit((char) buffer.read(), 10);
+        int month = readDigits(2);
         month -= 1; // Calendar months are 0-11
 
-        int day = 10 * Character.digit((char) buffer.read(), 10);
-        day += Character.digit((char) buffer.read(), 10);
+        int day = readDigits(2);
 
-        int hour = 10 * Character.digit((char) buffer.read(), 10);
-        hour += Character.digit((char) buffer.read(), 10);
+        int hour = readDigits(2);
 
-        int minute = 10 * Character.digit((char) buffer.read(), 10);
-        minute += Character.digit((char) buffer.read(), 10);
+        int minute = readDigits(2);
 
         len -= 12;
 
         // We allow for non-encoded seconds, even though the IETF-PKIX specification says that the seconds should always be encoded even if it is zero.
         int second;
         if (len == 3 || len == 7) {
-            second = 10 * Character.digit((char) buffer.read(), 10);
-            second += Character.digit((char) buffer.read(), 10);
+            second = readDigits(2);
             len -= 2;
         } else {
             second = 0;
@@ -628,10 +623,8 @@ public class DERInputStream {
         int mtmp;
         switch (buffer.read()) {
             case '+':
-                htmp = 10 * Character.digit((char) buffer.read(), 10);
-                htmp += Character.digit((char) buffer.read(), 10);
-                mtmp = 10 * Character.digit((char) buffer.read(), 10);
-                mtmp += Character.digit((char) buffer.read(), 10);
+                htmp = readDigits(2);
+                mtmp = readDigits(2);
                 if (htmp >= 24 || mtmp >= 60) {
                     throw new IOException("Parse GeneralizedTime, +hhmm");
                 }
@@ -640,10 +633,8 @@ public class DERInputStream {
                 break;
 
             case '-':
-                htmp = 10 * Character.digit((char) buffer.read(), 10);
-                htmp += Character.digit((char) buffer.read(), 10);
-                mtmp = 10 * Character.digit((char) buffer.read(), 10);
-                mtmp += Character.digit((char) buffer.read(), 10);
+                htmp = readDigits(2);
+                mtmp = readDigits(2);
 
                 if (htmp >= 24 || mtmp >= 60) {
                     throw new IOException("Parse GeneralizedTime, -hhmm");
@@ -743,6 +734,7 @@ public class DERInputStream {
         }
 
         int length = getDefiniteLength();
+        checkAvailable(length);
         byte[] retval = new byte[length];
 
         if (buffer.read(retval) != length) {
@@ -750,6 +742,39 @@ public class DERInputStream {
         }
 
         return new String(retval, enc);
+    }
+
+
+    /**
+     * Read decimal digits of a time value from the input stream.
+     *
+     * @param count the number of digits to read
+     * @return the value of the digits
+     * @throws IOException in case of a character which is not a decimal digit or the end of the data
+     */
+    private int readDigits(int count) throws IOException {
+        int value = 0;
+        for (int i = 0; i < count; i++) {
+            int c = buffer.read();
+            if (c < '0' || c > '9') {
+                throw new IOException("DER input, invalid digit in time value");
+            }
+            value = value * 10 + (c - '0');
+        }
+        return value;
+    }
+
+
+    /**
+     * Check that the given number of bytes is available before an array of this size is allocated.
+     *
+     * @param length the number of bytes
+     * @throws IOException in case there are less bytes available
+     */
+    private void checkAvailable(int length) throws IOException {
+        if (length > buffer.available()) {
+            throw new IOException("DER input, length " + length + " exceeds the available data");
+        }
     }
 
     

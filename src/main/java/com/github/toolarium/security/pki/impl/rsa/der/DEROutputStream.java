@@ -170,7 +170,11 @@ public class DEROutputStream extends ByteArrayOutputStream implements DEREncoder
      */
     private void putBigInt(BigInt i) {
         byte[] b = i.toByteArray();
-        if ((b[0] & 0x080) != 0) {
+        if (b.length == 0) {
+            // zero has no significant bytes, it is encoded as one zero byte
+            putLength(1);
+            write(0);
+        } else if ((b[0] & 0x080) != 0) {
             // prepend zero so it's not read as a negative number
             putLength(b.length + 1);
             write(0);

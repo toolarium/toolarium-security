@@ -55,7 +55,7 @@ public interface ICertificateGenerator {
      *
      * @param certificateStore the certificate store
      * @param dn the name
-     * @param alternativeDn the alternative dn
+     * @param alternativeDn the alternative dn (host name), or null to use the dn and localhost as subject alternative names
      * @param startDate the start date
      * @param validityDays number of days
      * @return a new created certificate
@@ -79,7 +79,7 @@ public interface ICertificateGenerator {
      * Creates a certificate
      * 
      * @param dn the name
-     * @param alternativeDn the alternative dn
+     * @param alternativeDn the alternative dn (host name), or null to use the dn and localhost as subject alternative names
      * @param validityDays number of days
      * @return a new created certificate
      * @throws GeneralSecurityException In case of a creation error
@@ -92,7 +92,7 @@ public interface ICertificateGenerator {
      * 
      * @param keyPair the key pair to create the certificate from 
      * @param dn the name
-     * @param alternativeDn the alternative dn
+     * @param alternativeDn the alternative dn (host name), or null to use the dn and localhost as subject alternative names
      * @param startDate the start date
      * @param validityDays number of days
      * @return a new created certificate
@@ -107,7 +107,7 @@ public interface ICertificateGenerator {
      * @param keyPair the key pair to create the certificate from
      * @param parent the parent certificate chain 
      * @param dn the name
-     * @param alternativeDn alternative dn (e.g. hostname)
+     * @param alternativeDn alternative dn (e.g. hostname), or null to use the dn and localhost as subject alternative names
      * @param startDate the start date
      * @param inputValidityDays number of days (min 1 day)
      * @return a new created certificate

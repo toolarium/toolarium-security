@@ -142,7 +142,7 @@ public final class SSLContextFactory {
         sslContext.init(securityManagerProvider.getKeyManagers(), securityManagerProvider.getTrustManagers(), secureRandom);
 
         if (allowedCipherSuites != null && allowedCipherSuites.length > 0) {
-            String[] cipherSuites = filterSupportedCipherSuites(sslContext.createSSLEngine(), allowedCipherSuites);
+            String[] cipherSuites = filterSupportedCipherSuites(sslContext.getSupportedSSLParameters().getCipherSuites(), allowedCipherSuites);
             if (cipherSuites.length > 0) {
                 return new RestrictedSSLContext(sslContext, cipherSuites);
             }
@@ -167,7 +167,7 @@ public final class SSLContextFactory {
             return;
         }
 
-        String[] enabled = filterSupportedCipherSuites(engine, allowedCipherSuites);
+        String[] enabled = filterSupportedCipherSuites(engine.getSupportedCipherSuites(), allowedCipherSuites);
         if (enabled.length > 0) {
             engine.setEnabledCipherSuites(enabled);
         }
@@ -175,20 +175,20 @@ public final class SSLContextFactory {
 
 
     /**
-     * Filter the cipher suites which are supported by the given {@link SSLEngine}. Unsupported suites are logged and skipped.
+     * Filter the cipher suites which are supported. Unsupported suites are logged and skipped.
      *
-     * @param engine the SSL engine
+     * @param supportedCipherSuites the supported cipher suites
      * @param allowedCipherSuites the cipher suites to filter
      * @return the supported cipher suites
      */
-    private String[] filterSupportedCipherSuites(SSLEngine engine, String... allowedCipherSuites) {
-        java.util.Set<String> supported = new java.util.HashSet<>(java.util.Arrays.asList(engine.getSupportedCipherSuites()));
+    private String[] filterSupportedCipherSuites(String[] supportedCipherSuites, String... allowedCipherSuites) {
+        java.util.Set<String> supported = new java.util.HashSet<>(java.util.Arrays.asList(supportedCipherSuites));
         java.util.List<String> enabled = new java.util.ArrayList<>();
         for (String suite : allowedCipherSuites) {
             if (supported.contains(suite)) {
                 enabled.add(suite);
             } else {
-                LOG.warn("Cipher suite not supported by JVM, skipping: " + suite);
+                LOG.warn("Cipher suite not supported by JVM, skipping: {}", suite);
             }
         }
         return enabled.toArray(new String[0]);

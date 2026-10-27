@@ -65,7 +65,7 @@ public class CertificateVerifierTest {
 
 
     /**
-     * Test verifyCertificateChain with null — should not throw
+     * Test verifyCertificateChain with null: should not throw
      *
      * @throws GeneralSecurityException in case of error
      */
@@ -77,7 +77,7 @@ public class CertificateVerifierTest {
 
 
     /**
-     * Test verifyCertificateChain with empty array — should not throw
+     * Test verifyCertificateChain with empty array: should not throw
      *
      * @throws GeneralSecurityException in case of error
      */
@@ -89,7 +89,7 @@ public class CertificateVerifierTest {
 
 
     /**
-     * Test verifyCertificateChain with null consumer — should not throw (null consumer is valid)
+     * Test verifyCertificateChain with null consumer: should not throw (null consumer is valid)
      *
      * @throws Exception in case of error
      */
@@ -121,7 +121,7 @@ public class CertificateVerifierTest {
         assertTrue(chain.length > 0);
 
         CertificateVerifier verifier = new CertificateVerifier();
-        // should not throw — self-signed verification uses the cert's own public key
+        // should not throw: self-signed verification uses the cert's own public key
         verifier.verifyCertificateChain(LOG::debug, chain);
     }
 
@@ -145,7 +145,7 @@ public class CertificateVerifierTest {
 
 
     /**
-     * Test verifyCertificate (single cert overload) with null certificate — must throw GeneralSecurityException
+     * Test verifyCertificate (single cert overload) with null certificate: must throw GeneralSecurityException
      */
     @Test
     public void testVerifyNullCertificateThrows() {
@@ -155,7 +155,7 @@ public class CertificateVerifierTest {
 
 
     /**
-     * Test verifyCertificate (two-arg overload) with CA cert — leaf verified against its issuer
+     * Test verifyCertificate (two-arg overload) with CA cert: leaf verified against its issuer
      *
      * @throws Exception in case of error
      */
@@ -182,7 +182,7 @@ public class CertificateVerifierTest {
 
 
     /**
-     * Test verifyCertificate (two-arg overload) with wrong CA cert — must throw
+     * Test verifyCertificate (two-arg overload) with wrong CA cert: must throw
      *
      * @throws Exception in case of error
      */
@@ -199,13 +199,13 @@ public class CertificateVerifierTest {
         X509Certificate cert2 = caStore2.getCertificates()[0];
 
         CertificateVerifier verifier = new CertificateVerifier();
-        // cert1 was NOT signed by cert2 — verification must fail
+        // cert1 was NOT signed by cert2; verification must fail
         assertThrows(GeneralSecurityException.class, () -> verifier.verifyCertificate(LOG::debug, cert1, cert2));
     }
 
 
     /**
-     * Test verifyCertificate (two-arg overload) with null caCert — self-signed path
+     * Test verifyCertificate (two-arg overload) with null caCert: self-signed path
      *
      * @throws Exception in case of error
      */
@@ -298,7 +298,7 @@ public class CertificateVerifierTest {
 
 
     /**
-     * Test via the factory verifier (shared singleton) — chain verification without revocation
+     * Test via the factory verifier (shared singleton): chain verification without revocation
      *
      * @throws Exception in case of error
      */

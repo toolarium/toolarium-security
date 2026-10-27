@@ -48,7 +48,7 @@ public final class Modulo10 extends AbstractModulo<Long> {
      */
     @Override
     public Long createCheckDigit(String data) {
-        if (data == null || data.isBlank()) {
+        if (data == null || data.trim().isEmpty()) {
             throw new IllegalArgumentException("Invalid numbers!");
         }
         

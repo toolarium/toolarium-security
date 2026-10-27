@@ -10,7 +10,7 @@ Some classes originate from [jpTools](https://jptools.sourceforge.net/) and have
 
 ## Built With
 
-* [cb](https://github.com/toolarium/common-build) - The toolarium common build
+* [cb](https://github.com/toolarium/common-build): The toolarium common build
 
 
 ## Versioning
@@ -47,15 +47,15 @@ dependencies {
 ```java
 byte[] digest = CryptoHashUtil.getInstance().sha256("content".getBytes());
 byte[] digest = CryptoHashUtil.getInstance().sha512("content".getBytes());
-byte[] digest = CryptoHashUtil.getInstance().createHash(/*provider*/null, "SHA-256", "content");
-byte[] hmac   = CryptoHashUtil.getInstance().createHashWithKey(null, "HmacSHA256", keyBytes, "content");
+byte[] digest = CryptoHashUtil.getInstance().createHash(/*provider*/null, "SHA-256", "content".getBytes());
+byte[] hmac   = CryptoHashUtil.getInstance().createHashWithKey(/*provider*/null, keyBytes, "content".getBytes());   // HmacSHA256
 ```
 
 #### URL-safe hash IDs (YouTube-style short IDs from numbers)
 ```java
-HashId hashId = new HashId("my-salt", /*minLength*/8);
-String encoded = hashId.encode(1L, 2L, 3L);   // e.g. "aBcDeFgH"
-long[] decoded = hashId.decode(encoded);       // [1, 2, 3]
+HashId hashId = HashId.createHashId("my-salt", /*minLength*/8);
+String encoded = hashId.encrypt(1L, 2L, 3L);   // e.g. "aBcDeFgH"
+long[] decoded = hashId.decrypt(encoded);      // [1, 2, 3]
 ```
 
 
@@ -98,6 +98,8 @@ CertificateStore server = generator.createCreateCertificate(
     "server.example.com", "server.example.com", new Date(), 365);
 ```
 A CA certificate has no host name and can not be used as server certificate.
+The parent of a new certificate must be a CA certificate; `CertificateUtilFactory.getInstance().getGenerator(true)` also accepts a parent which is no CA (behaviour of version 1.1.8 and older).
+Without a host name (`alternativeDn` null) the certificate gets the dn and `localhost` as subject alternative names, otherwise only the given host name.
 
 #### Verify a certificate chain
 ```java
@@ -112,15 +114,19 @@ verifier.setRevocationStrict(true);   // reject if the revocation status can not
 
 verifier.verifyCertificateChain(LOG::debug, certificateChain);
 ```
-By default the chain validation is strict: expired or not yet valid certificates and issuers which are no CA are rejected.
+The issuer name of each certificate must be the subject name of the next certificate in the chain.
+By default the chain validation is strict: expired or not yet valid certificates, issuers which are no CA, a violated path length, unknown critical extensions and name constraints are rejected.
 Without trusted certificates the root certificate is only verified with its own signature.
 `setStrictChainValidation(false)` verifies the signatures only.
 `getVerifier()` and `createVerifier(...)` return a new verifier on every call.
 
 #### Convert PEM / DER strings to key and certificate objects
 ```java
-// Parse a PEM bundle that may contain certificates, private key, and public key
-PKIConfigurationUtil.getInstance().convert(pemBundle, keyAlgorithm, trustManagers, keyStore);
+// Parse PEM strings (e.g. from a configuration): the key type is taken from the key itself
+PrivateKey privateKey = PKIConfigurationUtil.getInstance().getPrivateKey(privateKeyPem);
+PublicKey publicKey = PKIConfigurationUtil.getInstance().getPublicKey(publicKeyPem);
+X509Certificate[] certificates = PKIConfigurationUtil.getInstance().getCertificate(certificatePem);
+TrustManager[] trustManagers = PKIConfigurationUtil.getInstance().getTrustManagers("myalias", certificatePem);
 
 // Convert individual keys
 PrivateKey priv = KeyConverterFactory.getInstance().getConverter("RSA").getPrivateKey(pemString);
@@ -142,7 +148,7 @@ ISecurityManagerProvider securityManagerProvider = SecurityManagerProviderFactor
 // 2. SSL server: the self-signed certificate is presented to connecting clients
 SSLContext serverCtx = SSLContextFactory.getInstance().createSslContext(securityManagerProvider);
 SSLServerSocket serverSocket = SSLUtil.getInstance()
-    .getSSLServerSocket(serverCtx, port, /*needClientAuth*/false, LOG::debug);
+    .getSSLServerSocket(serverCtx, port, /*propagateHotName*/false, LOG::debug);
 
 // 3. SSL client: the self-signed certificate is already in the trust store,
 //    so the client accepts connections to the same server without a CA
@@ -159,13 +165,35 @@ trustManager.addTrustedCertificate(serverCertificate);
 trustManager.setRevocationEnabled(true);
 ```
 The host name is checked against the subject alternative names first (wildcards like `*.example.com` are supported).
-Without a host name the host name check is skipped and a warning is logged.
+An IP address only matches an IP address subject alternative name.
+Without a configured host name the host name of the connection (SSLSocket / SSLEngine) is checked; if it is not known, the host name check is skipped and a warning is logged.
+The host name is only checked for server certificates, not for client certificates.
 While the verification is switched off (`setVerifyCertificate(false)`) every certificate is accepted, but none is added to the trusted certificates.
 
 #### Analyze a certificate chain
 ```java
-CertificateUtilFactory.getInstance().getChainAnalyzer()
-    .analyzeCertificateChain(LOG::debug, certificateChain);
+ICertificateChainAnalyzer analyzer = CertificateUtilFactory.getInstance().geChainAnalyzer();
+
+// build the chain of a key from a set of certificates (leaf first)
+List<X509Certificate> chain = analyzer.buildChainFor(keyPair.getPublic(), certificates);
+
+// order a chain root first, find the issuer, check self-signed
+List<X509Certificate> rootFirst = analyzer.toRootFirst(chain);
+X509Certificate issuer = analyzer.getIssuer(chain.get(0), certificates);
+boolean selfSigned = analyzer.isSelfSigned(rootFirst.get(0));
+```
+
+#### Read, format and filter certificates
+```java
+// read certificates from a PEM / PKCS#7 file or string
+X509Certificate[] certificates = CertificateUtilFactory.getInstance().getConverter().getX509Certificates(new File("certificate.crt"));
+
+// format certificates as PEM
+String pem = CertificateUtilFactory.getInstance().getConverter().formatPKCS7(certificates);
+
+// filter by validity
+List<X509Certificate> valid = CertificateUtilFactory.getInstance().getFilter().filterValid(Arrays.asList(certificates));
+List<X509Certificate> expired = CertificateUtilFactory.getInstance().getFilter().filterExpired(Arrays.asList(certificates));
 ```
 
 
@@ -185,6 +213,12 @@ KeyStoreUtil.getInstance().writePKCS12KeyStore(
 CertificateStore certificateStore = KeyStoreUtil.getInstance()
     .readPKCS12KeyPair("keystore.p12", null, "myalias", password);
 KeyPair keyPair = certificateStore.getKeyPair();
+
+// the shared default trust keystore (JVM trusted certificates) is read only
+KeyStore defaultTrustStore = KeyStoreUtil.getInstance().getDefaultTrustKeyStore();
+
+// a read only view of any loaded keystore: changes throw a KeyStoreException
+KeyStore readOnly = new ReadOnlyKeyStore(ks);
 
 // add a certificate to a copy of the default trust keystore (the shared one is not changed)
 KeyStore trustStore = KeyStoreUtil.getInstance().addCertificateToTrustKeystore("myalias", certificate);
@@ -221,7 +255,8 @@ SSLContext sslContext = SSLContextFactory.getInstance().createSslContext(provide
 #### Restrict cipher suites
 ```java
 // Specify an explicit allow-list; unsupported suites are logged and skipped.
-// Every engine and socket created from the context only enables these suites.
+// Every engine and socket created from the context only enables these suites and the protocols TLSv1.2 / TLSv1.3.
+// Without cipher suites the JVM default cipher suites and protocols are used.
 SSLContext ctx = SSLContextFactory.getInstance().createSslContext(provider,
     "TLS_AES_128_GCM_SHA256",
     "TLS_AES_256_GCM_SHA384",
@@ -297,16 +332,73 @@ boolean ok = ChallengeResponseUtil.getInstance()
 ```
 
 
+### Encryption
+
+#### Encrypt with RSA keys (hybrid encryption)
+```java
+// defaults: AES with 256 bit key, RSA-OAEP with SHA-256, chunks of 64 KB
+byte[] encrypted = CryptionAsymmetric.getInstance().encrypt(keyPair.getPublic(), data);
+byte[] decrypted = CryptionAsymmetric.getInstance().decrypt(keyPair.getPrivate(), encrypted);
+
+// text in, Base64 out
+String encryptedText = CryptionAsymmetric.getInstance().encrypt(keyPair.getPublic(), "my secret");
+
+// other settings
+CryptionAsymmetric cryption = CryptionAsymmetric.builder()
+    .provider("BC")
+    .aesKeySize(CryptionAsymmetric.AesKeySize.AES_128)
+    .oaepHash(CryptionAsymmetric.OaepHash.SHA_512)
+    .build();
+```
+
+#### Encrypt with an AES key or a passphrase
+```java
+SecretKey key = CryptionSymmetric.getInstance().generateKey();
+byte[] encrypted = CryptionSymmetric.getInstance().encrypt(key, data);
+byte[] decrypted = CryptionSymmetric.getInstance().decrypt(key, encrypted);
+
+// passphrase: the key is derived with PBKDF2 and a new salt for every encryption
+byte[] encryptedWithPassphrase = CryptionSymmetric.getInstance().encrypt("my-passphrase".toCharArray(), data);
+
+// other settings; data with more PBKDF2 iterations than maxIterations (default 200 000) is rejected when decrypting
+CryptionSymmetric cryption = CryptionSymmetric.builder()
+    .iterations(300_000)
+    .maxIterations(300_000)
+    .chunkSize(1024 * 1024)
+    .build();
+```
+
+#### Encrypt large content as a stream
+```java
+try (CryptionOutputStream out = new CryptionOutputStream(fileOutputStream, CryptionAsymmetric.getInstance(), keyPair.getPublic())) {
+    out.write(data);   // write the content in any number of calls
+}
+
+try (CryptionInputStream in = CryptionAsymmetric.getInstance().createInputStream(fileInputStream, keyPair.getPrivate())) {
+    int count = in.read(buffer);   // read the content in any number of calls
+}
+
+// the same with an AES key or a passphrase
+try (CryptionOutputStream out = CryptionSymmetric.getInstance().createOutputStream(fileOutputStream, "my-passphrase".toCharArray())) {
+    out.write(data);
+}
+```
+The stream must be closed: the last part of the content is written on `close()`.
+The streams and the `encrypt` / `decrypt` methods use the same format: data encrypted with one can be decrypted with the other.
+The settings are stored in the encrypted data, every instance can decrypt it.
+Modified data is detected and rejected.
+
+
 ### Cipher utilities
 
 #### Check strong encryption / create AES keys
 ```java
-boolean strongEncryption = CryptUtil.getInstance().isStrongEncryptionEnabled();
+boolean strongEncryption = CryptionUtil.getInstance().isStrongEncryptionEnabled();
 
 // derive an AES key with an own random salt (at least 16 bytes); store the salt with the encrypted data
-byte[] salt       = CryptUtil.getInstance().generateSalt();
-SecretKeySpec key = CryptUtil.getInstance().createSecretKeySpec("my-secret-passphrase".toCharArray(), salt, 100_000);
-Cipher cipher     = CryptUtil.getInstance().getCipher("AES/GCM/NoPadding");
+byte[] salt       = CryptionUtil.getInstance().generateSalt();
+SecretKeySpec key = CryptionUtil.getInstance().createSecretKeySpec("my-secret-passphrase".toCharArray(), salt, 100_000);
+Cipher cipher     = CryptionUtil.getInstance().getCipher("AES/GCM/NoPadding");
 ```
 
 
@@ -314,8 +406,8 @@ Cipher cipher     = CryptUtil.getInstance().getCipher("AES/GCM/NoPadding");
 
 #### Modulo 10 / 11
 ```java
-char check10 = Modulo10.getInstance().getCheckDigit("12345678");
-char check11 = Modulo11.getInstance().getCheckDigit("12345678");
+Long   check10 = Modulo10.getInstance().createCheckDigit("12345678");
+String check11 = Modulo11.getInstance().createCheckDigit("12345678");
 
 boolean valid10 = Modulo10.getInstance().validate("123456784");
 boolean valid11 = Modulo11.getInstance().validate("123456782");

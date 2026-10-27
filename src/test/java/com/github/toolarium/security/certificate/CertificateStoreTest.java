@@ -6,6 +6,7 @@
 package com.github.toolarium.security.certificate;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.github.toolarium.security.certificate.dto.CertificateStore;
 import com.github.toolarium.security.certificate.util.PKIUtilTest;
@@ -125,15 +126,41 @@ public class CertificateStoreTest {
         // load parent certificate
         //CertificateStore certificateStoreParent3 = new CertificateStore(Paths.get(PKIUtilTest.TEST_RESOURCE_PATH, PKIUtilTest.PKCS12_TESTFILE).toString(), PKIUtilTest.PKCS12_ALIAS, PKIUtilTest.PKCS12_KEYSTORE_PASSWORD);
         
-        // cretae new certificate
-        CertificateStore certificateStore = 
-                CertificateUtilFactory.getInstance().getGenerator().createCreateCertificate(PKIUtil.getInstance().generateKeyPair(null, "RSA", 2048), // new RSA 2048 
-                                                                                            certificateStoreParent1, 
-                                                                                            "myTest",  // dn 
+        // cretae new certificate: the parent is no CA certificate, so it can not sign the new certificate
+        assertThrows(GeneralSecurityException.class, () ->
+                CertificateUtilFactory.getInstance().getGenerator().createCreateCertificate(PKIUtil.getInstance().generateKeyPair(null, "RSA", 2048), // new RSA 2048
+                                                                                            certificateStoreParent1,
+                                                                                            "myTest",  // dn
                                                                                             "aaa",     //
-                                                                                            new Date(),// from now 
+                                                                                            new Date(),// from now
+                                                                                            1));       // 1 day
+    }
+
+
+    /**
+     * Create a certificate signed by a CA parent and write it to a pkcs12 file store
+     *
+     * @throws GeneralSecurityException In case of an error
+     * @throws IOException In case of an error
+     */
+    @Test
+    public void testWriteFromCAParent() throws GeneralSecurityException, IOException {
+        CertificateStore certificateStoreParent1 =
+                CertificateUtilFactory.getInstance().getGenerator().createCACertificate(PKIUtil.getInstance().generateKeyPair(null, "RSA", 2048), // new RSA 2048
+                                                                                        null,
+                                                                                        "myParent1",  // dn
+                                                                                        new Date(),// from now
+                                                                                        1);        // 1 day
+
+        // cretae new certificate
+        CertificateStore certificateStore =
+                CertificateUtilFactory.getInstance().getGenerator().createCreateCertificate(PKIUtil.getInstance().generateKeyPair(null, "RSA", 2048), // new RSA 2048
+                                                                                            certificateStoreParent1,
+                                                                                            "myTest",  // dn
+                                                                                            "aaa",     //
+                                                                                            new Date(),// from now
                                                                                             1);        // 1 day
-        
+
         assertNotNull(certificateStore);
         assertNotNull(certificateStore.getCertificates());
         assertNotNull(certificateStore.getKeyPair());

@@ -58,7 +58,7 @@ public final class JavaSecurityTester {
             testCipher.init(Cipher.ENCRYPT_MODE, key);
             print("> Strong encryption is enabled.");
         } catch (Exception e) {
-            print("> Strong encryption is disabled.");
+            print("> Strong encryption is disabled: " + e.getClass().getName() + ": " + e.getMessage());
         }
     }
 

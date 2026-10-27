@@ -47,12 +47,12 @@ public final class Modulo11 extends AbstractModulo<String> {
      */
     @Override
     public String createCheckDigit(String data) {
-        if (data == null || data.isBlank()) {
+        if (data == null || data.trim().isEmpty()) {
             throw new IllegalArgumentException("Invalid numbers!");
         }
 
         long number = calculateModulo(data);
-        long result = number % 11;
+        long result = Math.floorMod(number, 11L);
         if (result == 0) {
             return "0";
         }
@@ -80,7 +80,9 @@ public final class Modulo11 extends AbstractModulo<String> {
         for (int i = 1; i <= length; i++) {
             // get digits in reverse order
             int digit = digits[i - 1];
-            sum += (11 - i) * digit;
+
+            // the weights 10..1 from the left, continued modulo 11 so they never become negative
+            sum += Math.floorMod(11 - i, 11) * digit;
         }
 
         return sum;

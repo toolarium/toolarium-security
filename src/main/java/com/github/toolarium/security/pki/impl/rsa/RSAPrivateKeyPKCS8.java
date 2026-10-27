@@ -11,8 +11,12 @@ import com.github.toolarium.security.pki.impl.rsa.der.DERValue;
 import com.github.toolarium.security.pki.impl.rsa.der.ObjectIdentifier;
 import java.io.IOException;
 import java.math.BigInteger;
+import java.security.GeneralSecurityException;
+import java.security.KeyFactory;
+import java.security.PrivateKey;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.spec.InvalidKeySpecException;
+import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.RSAPrivateCrtKeySpec;
 import java.security.spec.RSAPrivateKeySpec;
 import java.util.Arrays;
@@ -80,10 +84,10 @@ public class RSAPrivateKeyPKCS8 implements RSAPrivateKey {
      */
     public void checkEncoding() throws InvalidKeySpecException {
         checkNotDestroyed();
-        getEncoded();
+        byte[] data = getEncoded();
 
         try {
-            DERInputStream dis = new DERInputStream(encoded);
+            DERInputStream dis = new DERInputStream(data);
             DERValue[] derseq = dis.getSequence(3);
             if (derseq == null || derseq.length == 0) {
                 throw new InvalidKeySpecException("Empty DER sequence");
@@ -97,6 +101,10 @@ public class RSAPrivateKeyPKCS8 implements RSAPrivateKey {
         } catch (RuntimeException e) {
             // malformed input must not escape as an unchecked exception
             throw new InvalidKeySpecException("Invalid DER encoding: " + e.getMessage(), e);
+        } finally {
+            if (data != null) {
+                Arrays.fill(data, (byte) 0);
+            }
         }
 
         return;
@@ -107,10 +115,11 @@ public class RSAPrivateKeyPKCS8 implements RSAPrivateKey {
      * @see java.security.Key#getEncoded()
      */
     @Override
-    public byte[] getEncoded() {
+    public synchronized byte[] getEncoded() {
         checkNotDestroyed();
-        if (encoded != null) {
-            return encoded.clone();
+        byte[] result = encoded;
+        if (result != null) {
+            return result.clone();
         }
 
         try {
@@ -121,19 +130,20 @@ public class RSAPrivateKeyPKCS8 implements RSAPrivateKey {
 
             DEROutputStream dos = new DEROutputStream();
             dos.putSequence(pkcs8);
-            encoded = dos.toByteArray();
+            result = dos.toByteArray();
             dos.close();
+            encoded = result;
         } catch (Exception ex) {
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Could not encode RSA private key!", ex);
             }
-            LOG.warn("Could not encode RSA private key!: " + ex.getMessage());
+            LOG.warn("Could not encode RSA private key!: {}", ex.getMessage());
         }
 
-        if (encoded == null) {
+        if (result == null) {
             return null;
         }
-        return encoded.clone();
+        return result.clone();
     }
 
 
@@ -142,13 +152,16 @@ public class RSAPrivateKeyPKCS8 implements RSAPrivateKey {
      *
      * @return the key spec
      */
-    public RSAPrivateKeySpec getKeySpec() {
+    public synchronized RSAPrivateKeySpec getKeySpec() {
         checkNotDestroyed();
-        if (keyspec == null) {
-            getEncoded();
+        RSAPrivateCrtKeySpec result = keyspec;
+        if (result == null) {
+            // created from the encoded key: parse it on first access
+            result = parseKeySpec(encoded);
+            keyspec = result;
         }
 
-        return keyspec;
+        return result;
     }
 
 
@@ -158,11 +171,12 @@ public class RSAPrivateKeyPKCS8 implements RSAPrivateKey {
     @Override
     public BigInteger getPrivateExponent() {
         checkNotDestroyed();
-        if (keyspec == null) {
+        RSAPrivateKeySpec spec = getKeySpec();
+        if (spec == null) {
             return null;
         }
         
-        return getKeySpec().getPrivateExponent();
+        return spec.getPrivateExponent();
     }
 
 
@@ -172,11 +186,12 @@ public class RSAPrivateKeyPKCS8 implements RSAPrivateKey {
     @Override
     public BigInteger getModulus() {
         checkNotDestroyed();
-        if (keyspec == null) {
+        RSAPrivateKeySpec spec = getKeySpec();
+        if (spec == null) {
             return null;
         }
 
-        return getKeySpec().getModulus();
+        return spec.getModulus();
     }
 
 
@@ -220,6 +235,31 @@ public class RSAPrivateKeyPKCS8 implements RSAPrivateKey {
 
 
     /**
+     * Parse the key specification of a PKCS#8 encoded RSA private key.
+     *
+     * @param data the PKCS#8 encoded private key
+     * @return the key specification or null if it can not be parsed
+     */
+    private static RSAPrivateCrtKeySpec parseKeySpec(byte[] data) {
+        if (data == null) {
+            return null;
+        }
+
+        try {
+            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+            PrivateKey privateKey = keyFactory.generatePrivate(new PKCS8EncodedKeySpec(data));
+            return keyFactory.getKeySpec(privateKey, RSAPrivateCrtKeySpec.class);
+        } catch (GeneralSecurityException | RuntimeException ex) {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Could not parse RSA private key!", ex);
+            }
+            LOG.warn("Could not parse RSA private key!: {}", ex.getMessage());
+            return null;
+        }
+    }
+
+
+    /**
      * Converts a RSA private key into a DerValue
      *
      * @param a the private key
@@ -257,9 +297,17 @@ public class RSAPrivateKeyPKCS8 implements RSAPrivateKey {
         rsastuff[6] = getTwoByteDerValue(keyspec.getPrimeExponentP());
         rsastuff[7] = getTwoByteDerValue(keyspec.getPrimeExponentQ());
         rsastuff[8] = getTwoByteDerValue(keyspec.getCrtCoefficient());
-        DERValue sequence = parse(rsastuff);
 
-        return getDERValue(sequence.toByteArray());
+        DEROutputStream dos = new DEROutputStream();
+        dos.putSequence(rsastuff);
+        byte[] sequence = dos.toByteArray();
+        dos.close();
+        try {
+            // the DERValue keeps its own copy
+            return getDERValue(sequence);
+        } finally {
+            Arrays.fill(sequence, (byte) 0);
+        }
     }
 
 
@@ -320,6 +368,12 @@ public class RSAPrivateKeyPKCS8 implements RSAPrivateKey {
      * @return the value
      */
     private static DERValue getTwoByteDerValue(BigInteger bi) {
-        return new DERValue((byte) 2, bi.toByteArray());
+        byte[] value = bi.toByteArray();
+        try {
+            // the DERValue keeps its own copy
+            return new DERValue((byte) 2, value);
+        } finally {
+            Arrays.fill(value, (byte) 0);
+        }
     }
 }

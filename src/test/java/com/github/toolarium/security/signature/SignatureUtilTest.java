@@ -87,7 +87,9 @@ public class SignatureUtilTest {
         // create signature
         final byte[] rawSignature = SignatureUtil.getInstance().sign(provider, signatureAlgorithm, keyPair.getPrivate(), rawContent);
         final String signature = new String(Base64.getEncoder().encode(rawSignature));
-        LOG.debug("Signature: " + signature);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Signature: {}", signature);
+        }
 
         // decode signature and compare
         final byte[] sigantureToVerify = Base64.getDecoder().decode(signature.getBytes());

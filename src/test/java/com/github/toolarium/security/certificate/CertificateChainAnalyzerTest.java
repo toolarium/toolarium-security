@@ -84,7 +84,7 @@ public class CertificateChainAnalyzerTest {
                 .createCreateCertificate("TestGetCertForMiss2");
 
         ICertificateChainAnalyzer analyzer = CertificateUtilFactory.getInstance().geChainAnalyzer();
-        // look for cert2's key in cert1's collection — should return null
+        // look for cert2's key in cert1's collection: should return null
         X509Certificate found = analyzer.getCertificateFor(certificateStore2.getKeyPair().getPublic(),
                 Arrays.asList(certificateStore1.getCertificates()));
         assertNull(found);
@@ -107,7 +107,9 @@ public class CertificateChainAnalyzerTest {
         assertNotNull(chain);
         assertTrue(chain.size() >= 1);
 
-        LOG.debug("Chain length: " + chain.size());
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Chain length: {}", chain.size());
+        }
     }
 
 

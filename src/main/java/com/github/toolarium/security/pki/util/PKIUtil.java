@@ -87,7 +87,7 @@ public final class PKIUtil {
         }
         
         if (LOG.isInfoEnabled()) {
-            LOG.info("Generating new KeyPair (" + msg + ")...");
+            LOG.info("Generating new KeyPair ({})...", msg);
         }
 
         // The key generation object
@@ -106,7 +106,7 @@ public final class PKIUtil {
         
         // Initialise the key generator to generate keys.
         if (LOG.isDebugEnabled()) {
-            LOG.debug("Initializing the key generator (" + keySize + " bits).");
+            LOG.debug("Initializing the key generator ({} bits).", keySize);
         }
             
         keyPairGenerator.initialize(keySize, RandomGenerator.getInstance().getSecureRandom());
@@ -281,6 +281,7 @@ public final class PKIUtil {
      * @param startTag the start tag
      * @param endTag the end tag
      * @return the normalised data
+     * @throws IllegalArgumentException if the data contains a non ASCII character
      */
     public String normalizeBuffer(String rawCertificate, String startTag, String endTag) {
         return normalizeBuffer(new ByteArray(rawCertificate), startTag, endTag).toString();
@@ -294,6 +295,7 @@ public final class PKIUtil {
      * @param startTag the start tag
      * @param endTag the end tag
      * @return the normalised data
+     * @throws IllegalArgumentException if the data contains a non ASCII character
      */
     public ByteArray normalizeBuffer(ByteArray rawCertificate, String startTag, String endTag) {
         if (rawCertificate == null) {
@@ -319,6 +321,11 @@ public final class PKIUtil {
         char ch = 0;
         for (int i = 0; i < data.length(); i++) {
             ch = data.charAt(i);
+            if (ch > 0x7F) {
+                // a cast to byte would truncate the character and could turn it into a valid base64 character
+                throw new IllegalArgumentException("Invalid non ASCII character at position " + i + "!");
+            }
+
             if ((ch != '\n') && (ch != '\r')) {
                 newData.append((byte) ch);
             }

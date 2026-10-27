@@ -50,6 +50,9 @@ public final class PKIConfigurationUtil {
     private static final String END_PUBLIC_KEY = "PUBLIC KEY-----";
     private static final String ENCRYPTED = "ENCRYPTED";
     private static final Pattern PEM_BOUNDARY = Pattern.compile("-----(BEGIN|END)[^-]*-----");
+    private static final Pattern KEY_TYPE_PATTERN = Pattern.compile("[A-Za-z0-9 \\-]{1,32}");
+    private static final String INVALID_PRIVATE_KEY = "Invalid private key!";
+    private static final String INVALID_PUBLIC_KEY = "Invalid public key!";
      
     
     /**
@@ -90,7 +93,7 @@ public final class PKIConfigurationUtil {
      * @throws GeneralSecurityException In case of general security exception
      */
     public KeyStore getKeyStore(String alias, String certificate) throws GeneralSecurityException {
-        if (certificate == null || certificate.isBlank()) {
+        if (certificate == null || certificate.trim().isEmpty()) {
             throw new GeneralSecurityException("Invalid certificate!");
         }
 
@@ -132,7 +135,7 @@ public final class PKIConfigurationUtil {
      * @throws GeneralSecurityException In case of general security exception
      */
     public KeyStore getTrustKeyStore(String alias, String certificate) throws GeneralSecurityException {
-        if (certificate == null || certificate.isBlank()) {
+        if (certificate == null || certificate.trim().isEmpty()) {
             throw new GeneralSecurityException("Invalid trust certificate!");
         }
         
@@ -158,7 +161,7 @@ public final class PKIConfigurationUtil {
      * @throws GeneralSecurityException In case of general security exception
      */
     public TrustManager[] getTrustManagers(String alias, String certificate) throws GeneralSecurityException {
-        if (certificate == null || certificate.isBlank()) {
+        if (certificate == null || certificate.trim().isEmpty()) {
             throw new GeneralSecurityException("Invalid trust certificate!");
         }
         
@@ -193,19 +196,19 @@ public final class PKIConfigurationUtil {
      * @throws GeneralSecurityException In case of general security exception
      */
     public PrivateKey getPrivateKey(String inputPrivateKeyString, String intputKeyType) throws GeneralSecurityException {
-        if (inputPrivateKeyString == null || inputPrivateKeyString.isBlank()) {
-            throw new GeneralSecurityException("Invalid private key!");
+        if (inputPrivateKeyString == null || inputPrivateKeyString.trim().isEmpty()) {
+            throw new GeneralSecurityException(INVALID_PRIVATE_KEY);
         }
-        
+
         String keyType = intputKeyType;
         String privateKeyString = inputPrivateKeyString.trim();
         if (privateKeyString.startsWith(START_CERTIFICATE)) {
-            int idx = privateKeyString.indexOf(END_PRIVATE_KEY, START_CERTIFICATE.length());
+            int idx = findHeaderEnd(privateKeyString, END_PRIVATE_KEY);
             if (idx < 0) {
-                throw new GeneralSecurityException("Invalid private key!");
+                throw new GeneralSecurityException(INVALID_PRIVATE_KEY);
             }
 
-            String readKeyType = readKeyType(privateKeyString, idx);
+            String readKeyType = readKeyType(privateKeyString, idx, INVALID_PRIVATE_KEY);
             if (readKeyType.startsWith(ENCRYPTED)) {
                 throw new GeneralSecurityException("Encrypted private keys are not supported!");
             }
@@ -218,7 +221,7 @@ public final class PKIConfigurationUtil {
             keyType = readKeyType;
         }
 
-        if (keyType == null || keyType.isBlank()) {
+        if (keyType == null || keyType.trim().isEmpty()) {
             keyType = "RSA";
         }
 
@@ -253,19 +256,19 @@ public final class PKIConfigurationUtil {
      * @throws GeneralSecurityException In case of general security exception
      */
     public PublicKey getPublicKey(String inputPublicKeyString, String intputKeyType) throws GeneralSecurityException {
-        if (inputPublicKeyString == null || inputPublicKeyString.isBlank()) {
-            throw new GeneralSecurityException("Invalid public key!");
+        if (inputPublicKeyString == null || inputPublicKeyString.trim().isEmpty()) {
+            throw new GeneralSecurityException(INVALID_PUBLIC_KEY);
         }
-        
+
         String keyType = intputKeyType;
         String publicKeyString = inputPublicKeyString.trim();
         if (publicKeyString.startsWith(START_CERTIFICATE)) {
-            int idx = publicKeyString.indexOf(END_PUBLIC_KEY, START_CERTIFICATE.length());
+            int idx = findHeaderEnd(publicKeyString, END_PUBLIC_KEY);
             if (idx < 0) {
-                throw new GeneralSecurityException("Invalid public key!");
+                throw new GeneralSecurityException(INVALID_PUBLIC_KEY);
             }
-            
-            String readKeyType = readKeyType(publicKeyString, idx);
+
+            String readKeyType = readKeyType(publicKeyString, idx, INVALID_PUBLIC_KEY);
             if (readKeyType.isEmpty()) {
                 // generic X.509 header (-----BEGIN PUBLIC KEY-----): the key type is not part of the header
                 return getGenericPublicKey(publicKeyString, keyType);
@@ -274,7 +277,7 @@ public final class PKIConfigurationUtil {
             keyType = readKeyType;
         }
 
-        if (keyType == null || keyType.isBlank()) {
+        if (keyType == null || keyType.trim().isEmpty()) {
             keyType = "RSA";
         }
 
@@ -287,18 +290,49 @@ public final class PKIConfigurationUtil {
 
 
     /**
+     * Find the end of the PEM header: the end marker is only searched within the first line of the PEM.
+     *
+     * @param pem the PEM string
+     * @param endMarker the end marker of the header, e.g. <code>PRIVATE KEY-----</code>
+     * @return the index of the end marker or -1 if the first line does not contain it
+     */
+    private int findHeaderEnd(String pem, String endMarker) {
+        int lineEnd = pem.length();
+        int newLineIndex = pem.indexOf('\n');
+        if (newLineIndex >= 0) {
+            lineEnd = newLineIndex;
+        }
+
+        int carriageReturnIndex = pem.indexOf('\r');
+        if (carriageReturnIndex >= 0 && carriageReturnIndex < lineEnd) {
+            lineEnd = carriageReturnIndex;
+        }
+
+        return pem.substring(0, lineEnd).indexOf(endMarker, START_CERTIFICATE.length());
+    }
+
+
+    /**
      * Read the key type from a PEM header, e.g. <code>RSA</code> from <code>-----BEGIN RSA PRIVATE KEY-----</code>.
      *
      * @param pem the PEM string
      * @param endIndex the index of the end of the header (start of <code>PRIVATE KEY-----</code> / <code>PUBLIC KEY-----</code>)
+     * @param errorMessage the message of the exception for an invalid key type, it must not contain parts of the PEM
      * @return the key type or an empty string if the header contains no key type
+     * @throws GeneralSecurityException if the header contains an invalid key type
      */
-    private String readKeyType(String pem, int endIndex) {
+    private String readKeyType(String pem, int endIndex, String errorMessage) throws GeneralSecurityException {
         int startIndex = START_CERTIFICATE.length() + 1;
         if (endIndex <= startIndex) {
             return "";
         }
-        return pem.substring(startIndex, endIndex).trim();
+
+        String keyType = pem.substring(startIndex, endIndex).trim();
+        if (!keyType.isEmpty() && !KEY_TYPE_PATTERN.matcher(keyType).matches()) {
+            throw new GeneralSecurityException(errorMessage);
+        }
+
+        return keyType;
     }
 
 
@@ -315,7 +349,7 @@ public final class PKIConfigurationUtil {
         byte[] decoded = decodePem(pem);
         try {
             String type = keyType;
-            if (type == null || type.isBlank()) {
+            if (type == null || type.trim().isEmpty()) {
                 try {
                     type = getKeyType(PrivateKeyInfo.getInstance(decoded).getPrivateKeyAlgorithm().getAlgorithm());
                 } catch (RuntimeException e) {
@@ -342,7 +376,7 @@ public final class PKIConfigurationUtil {
     private PublicKey getGenericPublicKey(String pem, String keyType) throws GeneralSecurityException {
         byte[] decoded = decodePem(pem);
         String type = keyType;
-        if (type == null || type.isBlank()) {
+        if (type == null || type.trim().isEmpty()) {
             try {
                 type = getKeyType(SubjectPublicKeyInfo.getInstance(decoded).getAlgorithm().getAlgorithm());
             } catch (RuntimeException e) {
@@ -398,7 +432,7 @@ public final class PKIConfigurationUtil {
      * @throws GeneralSecurityException In case of general security exception
      */
     public X509Certificate[] getCertificate(String inputCertificate) throws GeneralSecurityException {
-        if (inputCertificate == null || inputCertificate.isBlank()) {
+        if (inputCertificate == null || inputCertificate.trim().isEmpty()) {
             throw new GeneralSecurityException("Invalid certificate!");
         }
         

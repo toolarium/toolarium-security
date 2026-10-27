@@ -49,6 +49,7 @@ import org.slf4j.LoggerFactory;
 public class CertificateVerifier implements ICertificateVerifier {
     private static final Logger LOG = LoggerFactory.getLogger(CertificateVerifier.class);
     private static final int KEY_USAGE_KEY_CERT_SIGN = 5;
+    private static final String NAME_CONSTRAINTS_OID = "2.5.29.30";
     private volatile boolean revocationEnabled;
     private volatile boolean revocationStrict;
     private volatile boolean strictChainValidation;
@@ -198,8 +199,20 @@ public class CertificateVerifier implements ICertificateVerifier {
      */
     @Override
     public void verifyCertificateChain(Consumer<String> consumer, X509Certificate[] certs) throws GeneralSecurityException {
+        // read the configuration once, so a concurrent change does not affect a running verification
+        final boolean isStrictChainValidation = strictChainValidation;
+        final boolean isRevocationEnabled = revocationEnabled;
+        final boolean isRevocationStrict = revocationStrict;
+        final Set<X509Certificate> trusted = trustedCertificates;
+
         if (certs == null || certs.length == 0) {
             return;
+        }
+
+        for (int i = 0; i < certs.length; i++) {
+            if (certs[i] == null) {
+                throw new CertificateException("Certificate chain contains an invalid certificate (null) at position " + i + "!");
+            }
         }
 
         int anz = certs.length;
@@ -209,17 +222,21 @@ public class CertificateVerifier implements ICertificateVerifier {
 
         verifyCertificate(consumer, certs[anz - 1], null);
         for (int i = anz - 1; i > 0; i--) {
+            if (!certs[i - 1].getIssuerX500Principal().equals(certs[i].getSubjectX500Principal())) {
+                throw new CertificateException("Issuer '" + certs[i - 1].getIssuerX500Principal().getName() + "' of certificate '" + certs[i - 1].getSubjectX500Principal().getName()
+                                               + "' does not match the subject '" + certs[i].getSubjectX500Principal().getName() + "' of the next certificate in the chain!");
+            }
             verifyCertificate(consumer, certs[i - 1], certs[i]);
         }
 
-        verifyTrustedRoot(certs[anz - 1]);
+        verifyTrustedRoot(trusted, certs[anz - 1]);
 
-        if (strictChainValidation) {
+        if (isStrictChainValidation) {
             verifyChainConstraints(certs);
         }
 
-        if (revocationEnabled) {
-            verifyRevocation(consumer, certs);
+        if (isRevocationEnabled) {
+            verifyRevocation(consumer, certs, isRevocationStrict);
         }
 
         if (LOG.isDebugEnabled()) {
@@ -233,9 +250,13 @@ public class CertificateVerifier implements ICertificateVerifier {
      */
     @Override
     public void verifyCertificate(Consumer<String> consumer, X509Certificate userCert, X509Certificate caCert) throws GeneralSecurityException {
+        if (userCert == null) {
+            throw new CertificateException("Invalid certificate (null)!");
+        }
+
         if (caCert != null) {
             if (LOG.isDebugEnabled()) {
-                LOG.debug("Verify certificate: '" + userCert.getSubjectX500Principal().getName() + "'");
+                LOG.debug("Verify certificate: '{}'", userCert.getSubjectX500Principal().getName());
             }
             userCert.verify(caCert.getPublicKey());
 
@@ -252,7 +273,7 @@ public class CertificateVerifier implements ICertificateVerifier {
             // certificate will pass this check. For full trust-anchor validation, callers must
             // perform an additional check against a trusted KeyStore.
             if (LOG.isDebugEnabled()) {
-                LOG.debug("Verify self-signed root certificate: '" + userCert.getSubjectX500Principal().getName() + "'");
+                LOG.debug("Verify self-signed root certificate: '{}'", userCert.getSubjectX500Principal().getName());
             }
             userCert.verify(userCert.getPublicKey());
         }
@@ -269,7 +290,7 @@ public class CertificateVerifier implements ICertificateVerifier {
         }
 
         if (LOG.isDebugEnabled()) {
-            LOG.debug("Verify certificate: '" + userCertificate.getSubjectX500Principal().getName() + "'");
+            LOG.debug("Verify certificate: '{}'", userCertificate.getSubjectX500Principal().getName());
         }
         userCertificate.verify(userCertificate.getPublicKey());
 
@@ -285,11 +306,11 @@ public class CertificateVerifier implements ICertificateVerifier {
     /**
      * Verify that the root certificate is one of the trusted certificates, if a trust list is set.
      *
+     * @param trusted the trusted certificates or null if no trust list is set
      * @param rootCertificate the root certificate (the last certificate of the chain)
      * @throws CertificateException if a trust list is set and the root certificate is not part of it
      */
-    private void verifyTrustedRoot(X509Certificate rootCertificate) throws CertificateException {
-        Set<X509Certificate> trusted = trustedCertificates;
+    private void verifyTrustedRoot(Set<X509Certificate> trusted, X509Certificate rootCertificate) throws CertificateException {
         if (trusted == null) {
             if (LOG.isDebugEnabled() && missingTrustedCertificatesWarningLogged.compareAndSet(false, true)) {
                 LOG.debug("No trusted certificates configured, the root certificate is only verified with its own signature! Use setTrustedCertificates() to enable it.");
@@ -305,7 +326,8 @@ public class CertificateVerifier implements ICertificateVerifier {
 
     /**
      * Verify the validity dates of all certificates and that every issuer is a CA which is allowed to sign certificates.
-     * A self-signed root of version 1 (no extensions) is accepted as issuer, as the JDK PKIX validation does for trust anchors.
+     * The path length constraint of every issuer is verified, and certificates with an unsupported critical extension or
+     * an issuer with critical name constraints (not enforced here) are rejected. A self-signed root of version 1 (no extensions) is accepted as issuer, as the JDK PKIX validation does for trust anchors.
      *
      * @param certs the certificate chain, the leaf first and the root last
      * @throws CertificateExpiredException if a certificate is expired
@@ -324,14 +346,33 @@ public class CertificateVerifier implements ICertificateVerifier {
                 throw new CertificateNotYetValidException("Certificate '" + subject + "' is not yet valid (not before " + cert.getNotBefore() + ")!");
             }
 
+            if (cert.hasUnsupportedCriticalExtension()) {
+                throw new CertificateException("Certificate '" + subject + "' contains an unsupported critical extension!");
+            }
+
             if (i == 0) {
                 // the leaf is no issuer
                 continue;
             }
 
             boolean isV1Root = i == certs.length - 1 && cert.getVersion() == 1;
-            if (!isV1Root && cert.getBasicConstraints() < 0) {
+            int basicConstraints = cert.getBasicConstraints();
+            if (!isV1Root && basicConstraints < 0) {
                 throw new CertificateException("Issuer certificate '" + subject + "' is not a CA (basic constraints)!");
+            }
+
+            if (basicConstraints >= 0) {
+                // the number of intermediate CA certificates below this issuer (without the leaf and self-issued certificates)
+                int intermediateCount = countNonSelfIssuedIntermediates(certs, i);
+                if (intermediateCount > basicConstraints) {
+                    throw new CertificateException("Issuer certificate '" + subject + "' exceeds its path length constraint (" + basicConstraints + ")!");
+                }
+            }
+
+            Set<String> criticalExtensions = cert.getCriticalExtensionOIDs();
+            if (criticalExtensions != null && criticalExtensions.contains(NAME_CONSTRAINTS_OID)) {
+                // name constraints are not enforced: fail closed
+                throw new CertificateException("Issuer certificate '" + subject + "' contains critical name constraints, which are not supported!");
             }
 
             boolean[] keyUsage = cert.getKeyUsage();
@@ -347,14 +388,33 @@ public class CertificateVerifier implements ICertificateVerifier {
 
 
     /**
+     * Count the intermediate CA certificates between the leaf and the issuer at the given position, which are not self-issued.
+     *
+     * @param certs the certificate chain, the leaf first and the root last
+     * @param issuerIndex the position of the issuer in the chain
+     * @return the number of not self-issued intermediate certificates below the issuer
+     */
+    private int countNonSelfIssuedIntermediates(X509Certificate[] certs, int issuerIndex) {
+        int count = 0;
+        for (int j = 1; j < issuerIndex; j++) {
+            if (!certs[j].getSubjectX500Principal().equals(certs[j].getIssuerX500Principal())) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+
+    /**
      * Verify revocation status of the certificate chain using the JDK's PKIX CertPathValidator.
      * The root certificate (last in chain) is used as the trust anchor.
      *
      * @param consumer the consumer for log output
      * @param certs the certificate chain
+     * @param isRevocationStrict true to reject certificates with an unknown revocation status
      * @throws GeneralSecurityException if revocation check fails
      */
-    private void verifyRevocation(Consumer<String> consumer, X509Certificate[] certs) throws GeneralSecurityException {
+    private void verifyRevocation(Consumer<String> consumer, X509Certificate[] certs, boolean isRevocationStrict) throws GeneralSecurityException {
         if (certs.length < 1) {
             return;
         }
@@ -370,7 +430,7 @@ public class CertificateVerifier implements ICertificateVerifier {
         // build cert path from the chain (excluding the root)
         int pathLength = certs.length - 1;
         if (pathLength < 1) {
-            // single self-signed cert — no revocation path to validate
+            // single self-signed cert: no revocation path to validate
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Single self-signed certificate, skipping revocation check.");
             }
@@ -383,7 +443,7 @@ public class CertificateVerifier implements ICertificateVerifier {
         // PREFER_CRLS: check the CRL Distribution Points first, fallback to OCSP (Authority Information Access).
         // A revoked certificate always fails. If the status can not be determined (no OCSP / CRL endpoint or not
         // reachable), the certificate is accepted with a warning (soft fail), or rejected in strict mode.
-        if (revocationStrict) {
+        if (isRevocationStrict) {
             revocationChecker.setOptions(EnumSet.of(PKIXRevocationChecker.Option.PREFER_CRLS));
         } else {
             revocationChecker.setOptions(EnumSet.of(PKIXRevocationChecker.Option.PREFER_CRLS, PKIXRevocationChecker.Option.SOFT_FAIL));
@@ -395,7 +455,7 @@ public class CertificateVerifier implements ICertificateVerifier {
         params.addCertPathChecker(revocationChecker);
         CertificateFactory cf = CertificateFactory.getInstance("X.509");
         CertPath certPath = cf.generateCertPath(Arrays.asList(Arrays.copyOf(certs, pathLength)));
-        if (!revocationStrict) {
+        if (!isRevocationStrict) {
             // validate the path without revocation first: such errors must not be accepted as unknown revocation status
             PKIXParameters pathParams = new PKIXParameters(Collections.singleton(trustAnchor));
             pathParams.setRevocationEnabled(false);
@@ -407,11 +467,11 @@ public class CertificateVerifier implements ICertificateVerifier {
         } catch (CertPathValidatorException e) {
             // the JDK soft fail only covers network errors; a certificate without any OCSP / CRL endpoint fails with
             // an unspecific reason. In the default (not strict) mode only a revoked certificate is rejected.
-            if (revocationStrict || e.getReason() == CertPathValidatorException.BasicReason.REVOKED) {
+            if (isRevocationStrict || e.getReason() == CertPathValidatorException.BasicReason.REVOKED) {
                 throw e;
             }
 
-            LOG.warn("Certificate revocation status could not be determined, certificate accepted: " + e.getMessage());
+            LOG.warn("Certificate revocation status could not be determined, certificate accepted: {}", e.getMessage());
             if (consumer != null) {
                 consumer.accept("Certificate revocation status could not be determined.");
             }
@@ -421,7 +481,7 @@ public class CertificateVerifier implements ICertificateVerifier {
         List<CertPathValidatorException> softFailExceptions = revocationChecker.getSoftFailExceptions();
         if (softFailExceptions != null && !softFailExceptions.isEmpty()) {
             for (CertPathValidatorException e : softFailExceptions) {
-                LOG.warn("Certificate revocation status could not be determined, certificate accepted (soft fail): " + e.getMessage());
+                LOG.warn("Certificate revocation status could not be determined, certificate accepted (soft fail): {}", e.getMessage());
             }
 
             if (consumer != null) {

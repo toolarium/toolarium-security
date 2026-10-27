@@ -6,7 +6,9 @@
 package com.github.toolarium.security.pki.impl.rsa.der;
 
 import java.io.IOException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 
 
 /**
@@ -33,6 +35,9 @@ public class DERIndefLenConverter {
     private int index;
 
     private ArrayList<Object> ndefsList = new ArrayList<Object>();
+
+    // the open indefinite-length sections, innermost first: index in ndefsList and number of length bytes of the contained sections
+    private Deque<int[]> openSections = new ArrayDeque<int[]>();
     private int numOfTotalLenBytes = 0;
 
     
@@ -87,24 +92,15 @@ public class DERIndefLenConverter {
             return;
         }
         if (dataPos + 1 < dataSize && isEOC(data[dataPos]) && (data[dataPos + 1] == 0)) {
-            int numOfEncapsulatedLenBytes = 0;
-            Object elem = null;
-            int idx;
-
-            for (idx = ndefsList.size() - 1; idx >= 0; idx--) {
-                // Determine the first element in the vector that does not
-                // have a matching EOC
-                elem = ndefsList.get(idx);
-                if (elem instanceof Integer) {
-                    break;
-                }
-                numOfEncapsulatedLenBytes += ((byte[])elem).length - 3;
-            }
-            
-            if (elem == null || idx < 0) {
+            // The EOC terminates the innermost open indefinite-length section (constant time, no scan over all sections)
+            int[] section = openSections.poll();
+            if (section == null) {
                 throw new IOException("EOC does not have matching indefinite-length tag");
             }
-            int sectionLen = dataPos - ((Integer) elem).intValue() + numOfEncapsulatedLenBytes;
+
+            int idx = section[0];
+            int numOfEncapsulatedLenBytes = section[1];
+            int sectionLen = dataPos - ((Integer) ndefsList.get(idx)).intValue() + numOfEncapsulatedLenBytes;
             byte[] sectionLenBytes = getLengthBytes(sectionLen);
 
             ndefsList.set(idx, sectionLenBytes);
@@ -112,6 +108,12 @@ public class DERIndefLenConverter {
             // Add the number of bytes required to represent this section to the total number of length bytes,
             // and subtract the indefinite-length tag (1 byte) and EOC bytes (2 bytes) for this section
             numOfTotalLenBytes += (sectionLenBytes.length - 3);
+
+            // The enclosing section contains this section and all sections inside of it
+            int[] enclosingSection = openSections.peek();
+            if (enclosingSection != null) {
+                enclosingSection[1] += numOfEncapsulatedLenBytes + sectionLenBytes.length - 3;
+            }
         }
         dataPos++;
     }
@@ -119,8 +121,10 @@ public class DERIndefLenConverter {
 
     /**
      * Write the tag and if it is an end-of-contents tag then skip the tag and its 1 byte length of zero.
+     *
+     * @throws IOException if nesting depth exceeds the maximum allowed
      */
-    private void writeTag() {
+    private void writeTag() throws IOException {
         writeTag(0);
     }
 
@@ -128,11 +132,11 @@ public class DERIndefLenConverter {
      * Write the tag with depth tracking to prevent stack overflow from malformed input.
      *
      * @param depth the current recursion depth
-     * @throws IllegalArgumentException if nesting depth exceeds the maximum allowed
+     * @throws IOException if nesting depth exceeds the maximum allowed
      */
-    private void writeTag(int depth) {
+    private void writeTag(int depth) throws IOException {
         if (depth > MAX_RECURSION_DEPTH) {
-            throw new IllegalArgumentException("DER encoding too deeply nested (exceeded " + MAX_RECURSION_DEPTH + " levels)");
+            throw new IOException("DER encoding too deeply nested (exceeded " + MAX_RECURSION_DEPTH + " levels)");
         }
 
         if (dataPos == dataSize) {
@@ -164,7 +168,12 @@ public class DERIndefLenConverter {
         int lenByte = data[dataPos++] & 0xff;
 
         if (isIndefinite(lenByte)) {
+            if (openSections.size() >= DERInputStream.MAX_DER_NESTING_DEPTH) {
+                throw new IOException("DER encoding too deeply nested (exceeded " + DERInputStream.MAX_DER_NESTING_DEPTH + " levels)");
+            }
+
             ndefsList.add(Integer.valueOf(dataPos));
+            openSections.push(new int[] {ndefsList.size() - 1, 0});
             return curLen;
         }
 
@@ -333,6 +342,7 @@ public class DERIndefLenConverter {
         index = 0;
         dataSize = data.length;
         ndefsList = new ArrayList<Object>();
+        openSections = new ArrayDeque<int[]>();
         numOfTotalLenBytes = 0;
         int len = 0;
 

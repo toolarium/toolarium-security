@@ -19,7 +19,7 @@ import javax.net.ssl.TrustManager;
 
 
 /**
- * An {@link SSLContext} which restricts the enabled cipher suites of every {@link SSLEngine}, socket and server socket
+ * An {@link SSLContext} which restricts the enabled cipher suites and protocols (TLSv1.2 and TLSv1.3) of every {@link SSLEngine}, socket and server socket
  * it creates, as well as of its default {@link SSLParameters}. All other calls are delegated to the wrapped context.
  *
  * @author patrick
@@ -31,6 +31,7 @@ public class RestrictedSSLContext extends SSLContext {
      *
      * @param delegate the initialized SSL context to wrap
      * @param cipherSuites the cipher suites to enable, they must be supported by the delegate
+     * @throws IllegalArgumentException in case the cipher suites are null, empty or contain a null element
      */
     public RestrictedSSLContext(SSLContext delegate, String[] cipherSuites) {
         super(new RestrictedSSLContextSpi(delegate, cipherSuites), delegate.getProvider(), delegate.getProtocol());
@@ -45,6 +46,8 @@ public class RestrictedSSLContext extends SSLContext {
     private static final class RestrictedSSLContextSpi extends SSLContextSpi {
         private final SSLContext delegate;
         private final String[] cipherSuites;
+        private volatile SSLSocketFactory socketFactory;
+        private volatile SSLServerSocketFactory serverSocketFactory;
 
 
         /**
@@ -55,7 +58,7 @@ public class RestrictedSSLContext extends SSLContext {
          */
         RestrictedSSLContextSpi(SSLContext delegate, String[] cipherSuites) {
             this.delegate = delegate;
-            this.cipherSuites = cipherSuites.clone();
+            this.cipherSuites = RestrictionSupport.validateCipherSuites(cipherSuites);
         }
 
 
@@ -65,24 +68,56 @@ public class RestrictedSSLContext extends SSLContext {
         @Override
         protected void engineInit(KeyManager[] keyManagers, TrustManager[] trustManagers, SecureRandom secureRandom) throws KeyManagementException {
             delegate.init(keyManagers, trustManagers, secureRandom);
+
+            // the factories of the previous initialisation are not used anymore
+            synchronized (this) {
+                socketFactory = null;
+                serverSocketFactory = null;
+            }
         }
 
 
         /**
+         * The factory is created once and reused, so connections can be reused (e.g. keep alive of HttpsURLConnection).
+         *
          * @see javax.net.ssl.SSLContextSpi#engineGetSocketFactory()
          */
         @Override
         protected SSLSocketFactory engineGetSocketFactory() {
-            return new RestrictedSSLSocketFactory(delegate.getSocketFactory(), cipherSuites);
+            SSLSocketFactory result = socketFactory;
+            if (result == null) {
+                synchronized (this) {
+                    result = socketFactory;
+                    if (result == null) {
+                        result = new RestrictedSSLSocketFactory(delegate.getSocketFactory(), cipherSuites);
+                        socketFactory = result;
+                    }
+                }
+            }
+
+            return result;
         }
 
 
         /**
+         * The factory is created once and reused.
+         *
          * @see javax.net.ssl.SSLContextSpi#engineGetServerSocketFactory()
          */
         @Override
         protected SSLServerSocketFactory engineGetServerSocketFactory() {
-            return new RestrictedSSLServerSocketFactory(delegate.getServerSocketFactory(), cipherSuites);
+            SSLServerSocketFactory result = serverSocketFactory;
+            if (result == null) {
+                synchronized (this) {
+                    result = serverSocketFactory;
+                    if (result == null) {
+                        result = new RestrictedSSLServerSocketFactory(delegate.getServerSocketFactory(), cipherSuites);
+                        serverSocketFactory = result;
+                    }
+                }
+            }
+
+            return result;
         }
 
 
@@ -91,9 +126,7 @@ public class RestrictedSSLContext extends SSLContext {
          */
         @Override
         protected SSLEngine engineCreateSSLEngine() {
-            SSLEngine engine = delegate.createSSLEngine();
-            engine.setEnabledCipherSuites(cipherSuites.clone());
-            return engine;
+            return restrict(delegate.createSSLEngine());
         }
 
 
@@ -102,8 +135,22 @@ public class RestrictedSSLContext extends SSLContext {
          */
         @Override
         protected SSLEngine engineCreateSSLEngine(String host, int port) {
-            SSLEngine engine = delegate.createSSLEngine(host, port);
+            return restrict(delegate.createSSLEngine(host, port));
+        }
+
+
+        /**
+         * Restrict the enabled cipher suites and protocols of the engine
+         *
+         * @param engine the engine
+         * @return the engine
+         */
+        private SSLEngine restrict(SSLEngine engine) {
             engine.setEnabledCipherSuites(cipherSuites.clone());
+            String[] protocols = RestrictionSupport.selectProtocols(engine.getSupportedProtocols());
+            if (protocols.length > 0) {
+                engine.setEnabledProtocols(protocols);
+            }
             return engine;
         }
 
@@ -134,6 +181,10 @@ public class RestrictedSSLContext extends SSLContext {
             // e.g. the java HttpClient applies the default parameters to its engines
             SSLParameters parameters = delegate.getDefaultSSLParameters();
             parameters.setCipherSuites(cipherSuites.clone());
+            String[] protocols = RestrictionSupport.selectProtocols(delegate.getSupportedSSLParameters().getProtocols());
+            if (protocols.length > 0) {
+                parameters.setProtocols(protocols);
+            }
             return parameters;
         }
 

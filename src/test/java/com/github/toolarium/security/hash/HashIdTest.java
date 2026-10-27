@@ -222,7 +222,9 @@ public class HashIdTest {
                                             Calendar.getInstance().getTime().getTime(),
                                             RandomGenerator.getInstance().getLongRandom(), RandomGenerator.getInstance().getLongRandom(), RandomGenerator.getInstance().getLongRandom()); // blow up hash length
 
-        LOG.debug("Download URL: " + downloadId);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Download URL: {}", downloadId);
+        }
         assertTrue(downloadId.length() > 64);
 
         // decode
@@ -230,8 +232,10 @@ public class HashIdTest {
         long[] result2 = hashId2.decrypt(downloadId);
         assertEquals(0, result2.length);
         
-        LOG.debug("Hash        : " + result1[0]);
-        LOG.debug("Timestamp   : " + new Date(result1[2]));
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Hash        : {}", result1[0]);
+            LOG.debug("Timestamp   : {}", new Date(result1[2]));
+        }
 
         // validate
         assertEquals(hash, result1[0]);
@@ -266,10 +270,14 @@ public class HashIdTest {
     private void assertArrayEquals(long[] decrypt, long[] ls) {
         if (decrypt.length != ls.length) {
             for (int i = 0; i < decrypt.length; i++) {
-                LOG.debug("D:" + decrypt[i]);
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("D:{}", decrypt[i]);
+                }
             }
             for (int i = 0; i < ls.length; i++) {
-                LOG.debug("l:" + ls[i]);
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("l:{}", ls[i]);
+                }
             }
 
         }
